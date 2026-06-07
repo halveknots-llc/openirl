@@ -1,0 +1,7 @@
+services:
+  openirl-relay:
+    build:
+      context: ..
+      dockerfile: deploy/relay.Dockerfile
+    command: ["openirl-relay", "plan", "--config", "config/openirl.example.toml"]
+    network_mode: "host"

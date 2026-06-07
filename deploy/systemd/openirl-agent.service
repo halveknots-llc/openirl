@@ -1,0 +1,14 @@
+[Unit]
+Description=OpenIRL Local Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/openirl-agent serve --config /etc/openirl/openirl.toml
+Restart=on-failure
+RestartSec=5
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target

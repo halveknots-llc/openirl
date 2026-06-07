@@ -1,0 +1,9 @@
+{
+  "findings": [],
+  "status": "pass",
+  "tooling": {
+    "cargo": "cargo",
+    "rustc": "rustc",
+    "rustfmt": "rustfmt"
+  }
+}

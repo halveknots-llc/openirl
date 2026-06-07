@@ -1,0 +1,9 @@
+{
+  "encoder": "belabox",
+  "protocol": "srtla2",
+  "host": "127.0.0.1",
+  "port": 9001,
+  "stream_id": "openirl-main",
+  "latency_ms": 1800,
+  "bitrate_kbps": 4500
+}

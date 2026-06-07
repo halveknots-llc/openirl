@@ -1,0 +1,85 @@
+[api]
+bind = "127.0.0.1:7707"
+allow_lan = false
+history_limit = 512
+
+[runtime]
+demo_event_loop = false
+demo_tick_ms = 2500
+history_limit = 512
+
+[obs]
+# Start in dry-run so the agent can run without OBS.
+# Change to "web-socket" for real OBS WebSocket v5 control.
+adapter = "dry-run"
+host = "127.0.0.1"
+port = 4455
+password_env = "OPENIRL_OBS_PASSWORD"
+rpc_version = 1
+request_timeout_ms = 3000
+create_missing_scenes = true
+
+[ingest]
+public_host = "127.0.0.1"
+srt_port = 9000
+srtla_port = 9001
+rtmp_port = 1935
+default_latency_ms = 1800
+
+[relay]
+enabled = false
+mode = "local-direct"
+media_router = "mediamtx"
+supervisor_mode = "dry-run"
+auto_start = false
+restart_backoff_ms = 1500
+process_timeout_ms = 2000
+mediamtx_config_path = "deploy/mediamtx/openirl.mediamtx.yml"
+mediamtx_api_url = "http://127.0.0.1:9997"
+mediamtx_metrics_url = "http://127.0.0.1:9998/metrics"
+passphrase_env = "OPENIRL_SRT_PASSPHRASE"
+
+[[relay.processes]]
+name = "mediamtx"
+kind = "media-mtx"
+enabled = false
+executable = "mediamtx"
+executable_env = "OPENIRL_MEDIAMTX_PATH"
+args = ["deploy/mediamtx/openirl.mediamtx.yml"]
+version_args = ["--version"]
+restart_on_exit = true
+
+[metrics]
+enabled = true
+source = "disabled"
+auto_poll = false
+poll_interval_ms = 2500
+request_timeout_ms = 2000
+mediamtx_metrics_url = "http://127.0.0.1:9998/metrics"
+auto_switch_scenes = true
+allow_demo_samples = true
+
+[security]
+redact_logs = true
+require_auth_outside_localhost = true
+support_bundle_redact_ips = true
+dashboard_token_env = "OPENIRL_DASHBOARD_TOKEN"
+dashboard_auth_enabled = false
+allow_loopback_without_token = true
+
+[artifacts]
+fallback_assets_dir = "artifacts/assets/fallback"
+obs_templates_dir = "artifacts/obs-templates"
+support_bundles_dir = "artifacts/support-bundles"
+field_reports_dir = "artifacts/field-reports"
+private_alpha_dir = "artifacts/private-alpha"
+overwrite_existing = false
+
+[scenes]
+live = "OpenIRL Live"
+low_signal = "OpenIRL Low Signal"
+brb = "OpenIRL BRB"
+backup = "OpenIRL Backup Feed"
+privacy = "OpenIRL Privacy"
+starting = "OpenIRL Starting Soon"
+ending = "OpenIRL Ending"

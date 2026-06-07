@@ -1,0 +1,17 @@
+[package]
+name = "openirl-config"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+uuid.workspace = true
+openirl-core = { path = "../openirl-core" }
+serde.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+
+[lints]
+workspace = true

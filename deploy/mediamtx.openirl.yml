@@ -1,0 +1,33 @@
+# OpenIRL feature areas MediaMTX template.
+# This is intentionally conservative: it enables common IRL ingest protocols,
+# local API/metrics, and named paths that OBS can consume from the local host.
+
+logLevel: info
+api: true
+apiAddress: 127.0.0.1:9997
+metrics: true
+metricsAddress: 127.0.0.1:9998
+
+rtmp: true
+rtmpAddress: :1935
+
+srt: true
+srtAddress: :9000
+
+webrtc: true
+webrtcAddress: :8889
+
+hls: false
+rtsp: false
+
+paths:
+  openirl-main:
+    source: publisher
+  moblin-main:
+    source: publisher
+  irlpro-main:
+    source: publisher
+  belabox-main:
+    source: publisher
+  backup-main:
+    source: publisher

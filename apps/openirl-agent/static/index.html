@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenIRL Agent</title>
+    <style>
+      :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+      body { margin: 2rem; max-width: 1180px; }
+      code { background: #222; padding: .15rem .35rem; border-radius: .25rem; }
+      button { margin: .2rem .35rem .2rem 0; padding: .55rem .75rem; border-radius: .5rem; border: 1px solid #555; cursor: pointer; }
+      pre { background: #161616; border: 1px solid #333; border-radius: 12px; padding: 1rem; overflow: auto; min-height: 20rem; }
+      .card { border: 1px solid #444; border-radius: 12px; padding: 1rem; margin: 1rem 0; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+      textarea { width: 100%; min-height: 7rem; background: #111; color: #eee; border: 1px solid #444; border-radius: .5rem; padding: .5rem; }
+      input { width: 100%; box-sizing: border-box; background: #111; color: #eee; border: 1px solid #444; border-radius: .5rem; padding: .5rem; }
+    </style>
+  </head>
+  <body>
+    <h1>OpenIRL Agent</h1>
+    <div class="card">
+      <p>Rust-first local agent is running. feature areas adds the full v1/public-beta layer: OBS reconciliation, local ingest, mobile encoder compatibility, dashboard/security hardening, brownout v2, relay/tunnel planning, public beta release gates, WebRTC preview planning, vertical/clip workflows, and plugin API stabilization.</p>
+      <p>Core path: install locally, connect OBS, generate an encoder profile, simulate/ingest metrics, switch fallback scenes, mark clips, and run the alpha and mobile field validation evidence plans.</p>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>OBS Controls</h2>
+        <button data-post="/api/obs/start">Start Stream</button>
+        <button data-post="/api/obs/stop">Stop Stream</button>
+        <button data-post="/api/obs/switch/live">Live</button>
+        <button data-post="/api/obs/switch/low-signal">Low Signal</button>
+        <button data-post="/api/obs/switch/brb">BRB</button>
+        <button data-post="/api/obs/switch/backup-feed">Backup</button>
+        <button data-post="/api/obs/switch/privacy">Privacy</button>
+      </div>
+
+      <div class="card">
+        <h2>Setup</h2>
+        <label for="auth-token">Authorization token</label>
+        <input id="auth-token" type="password" autocomplete="current-password" />
+        <button id="save-auth-token">Save Token</button>
+        <button id="clear-auth-token">Clear Token</button>
+        <button data-get="/api/auth/status">Auth Status</button>
+        <button data-get="/api/install/plan">Install Plan</button>
+        <button data-get="/api/desktop/plan">Desktop Plan</button>
+        <button data-get="/api/onboarding/options">Onboarding Options</button>
+        <button data-post="/api/onboarding/quickstart">Quickstart</button>
+        <button data-get="/api/profiles/defaults">Profile Defaults</button>
+      </div>
+
+      <div class="card">
+        <h2>Metrics and Relay</h2>
+        <button data-get="/api/runtime/readiness">Readiness</button>
+        <button data-get="/api/relay/status">Relay Status</button>
+        <button data-get="/api/relay/plan">Relay Plan</button>
+        <button data-get="/api/metrics/sources">Metrics Sources</button>
+        <button data-get="/api/metrics/latest">Latest Metrics</button>
+        <button data-post="/api/metrics/simulate/healthy">Sim Healthy</button>
+        <button data-post="/api/metrics/simulate/degraded">Sim Degraded</button>
+        <button data-post="/api/metrics/simulate/brownout">Sim Brownout</button>
+        <button data-post="/api/metrics/simulate/offline">Sim Offline</button>
+        <button data-post="/api/metrics/poll">Poll Metrics</button>
+      </div>
+
+      <div class="card">
+        <h2>Production</h2>
+        <button data-get="/api/production/plan">Production Plan</button>
+        <button data-get="/api/production/markers">Markers</button>
+        <button data-post-json="/api/production/marker" data-json='{"title":"Dashboard marker","note":"manual marker","tags":["dashboard"]}'>Add Marker</button>
+        <button data-post="/api/production/replay/save">Save Replay</button>
+        <button data-post="/api/production/recording/start">Start Recording</button>
+        <button data-post="/api/production/recording/stop">Stop Recording</button>
+        <button data-post-json="/api/moderation/command" data-json='{"role":"moderator","action":"privacy","argument":null}'>Mod Privacy</button>
+      </div>
+
+      <div class="card">
+        <h2>Alpha Validation</h2>
+        <button data-get="/api/alpha/validation-plan">Alpha Plan</button>
+        <button data-get="/api/alpha/operator-checklist">Operator Checklist</button>
+        <button data-get="/api/alpha/readiness">Alpha Readiness</button>
+      </div>
+
+      <div class="card">
+        <h2>Field Validation</h2>
+        <button data-get="/api/field/validation-plan">Field Plan</button>
+        <button data-get="/api/field/device-checklists">Device Checklists</button>
+        <button data-get="/api/field/sample-evidence">Sample Evidence</button>
+        <button data-get="/api/field/readiness">Field Readiness</button>
+        <button data-post-json="/api/field/evidence" data-json='{"static_validation_passed":true,"rust_ci_passed":false,"windows_alpha_ready":false,"moblin_profile_generated":true,"moblin_qr_scanned":false,"moblin_ingest_seen":false,"irlpro_profile_generated":true,"irlpro_qr_scanned":false,"irlpro_ingest_seen":false,"belabox_profile_generated":false,"belabox_config_reviewed":false,"belabox_ingest_seen":false,"mediamtx_srt_path_active":false,"mediamtx_metrics_seen":false,"obs_connected":false,"obs_media_source_seen":false,"healthy_state_seen":false,"brownout_state_seen":false,"brb_scene_seen":false,"recovery_state_seen":false,"support_bundle_captured":false,"secrets_redacted":true,"field_report_written":false}'>Evaluate Field Evidence</button>
+      </div>
+
+
+      <div class="card">
+        <h2>Artifacts</h2>
+        <button data-get="/api/artifacts/plan">Artifact Plan</button>
+        <button data-post="/api/artifacts/fallback-assets/materialize">Write Fallback Assets</button>
+        <button data-get="/api/obs/template">OBS Template</button>
+        <button data-post="/api/obs/template/materialize">Write OBS Template JSON</button>
+        <button data-post="/api/obs/template/apply">Apply OBS Template</button>
+        <button data-post-json="/api/session/support-bundle/export" data-json='{}'>Export Support Bundle</button>
+        <button data-post="/api/field/report/export">Export Field Report</button>
+        <button data-get="/api/alpha/package-layout">Alpha Package Layout</button>
+        <button data-post="/api/alpha/package-layout/materialize">Write Alpha Layout</button>
+      </div>
+
+
+      <div class="card">
+        <h2>V1 / Public Beta</h2>
+        <button data-get="/api/v1/features">feature areas</button>
+        <button data-get="/api/v1/summary">V1 Summary</button>
+        <button data-get="/api/v1/sample-evidence">Sample V1 Evidence</button>
+        <button data-get="/api/v1/readiness">V1 Readiness</button>
+        <button data-get="/api/v1/package-layout">V1 Package Layout</button>
+        <button data-post="/api/v1/package-layout/materialize">Write V1 Package</button>
+      </div>
+
+      <div class="card">
+        <h2>Release</h2>
+        <button data-get="/api/release/manifest">Release Manifest</button>
+        <button data-get="/api/release/gates">Release Gates</button>
+        <button data-get="/api/release/smoke-plan">Smoke Plan</button>
+        <button data-get="/api/session/support-bundle">Support Bundle</button>
+      </div>
+
+      <div class="card">
+        <h2>Custom Request</h2>
+        <input id="custom-path" value="/api/state" />
+        <textarea id="custom-body">{"encoder":"moblin","protocol":"srtla","host":"127.0.0.1","port":9001,"stream_id":"moblin-main","passphrase":"replace-me","latency_ms":1800,"bitrate_kbps":4500}</textarea>
+        <button id="custom-get">GET</button>
+        <button id="custom-post">POST JSON</button>
+        <button id="custom-profile-qr">POST /api/profile/qr</button>
+      </div>
+    </div>
+
+    <pre id="output">Click a button to query the local agent.</pre>
+
+    <script>
+      const output = document.querySelector('#output');
+      const tokenInput = document.querySelector('#auth-token');
+      tokenInput.value = localStorage.getItem('openirl.authToken') || '';
+      document.querySelector('#save-auth-token').addEventListener('click', () => {
+        localStorage.setItem('openirl.authToken', tokenInput.value.trim());
+        output.textContent = 'Authorization token saved locally in this browser.';
+      });
+      document.querySelector('#clear-auth-token').addEventListener('click', () => {
+        localStorage.removeItem('openirl.authToken');
+        tokenInput.value = '';
+        output.textContent = 'Authorization token cleared.';
+      });
+      async function request(method, path, body) {
+        output.textContent = `${method} ${path} ...`;
+        const options = { method, headers: {} };
+        const authToken = tokenInput.value.trim();
+        if (authToken) {
+          options.headers.authorization = `Bearer ${authToken}`;
+        }
+        if (body !== undefined) {
+          options.headers['content-type'] = 'application/json';
+          options.body = typeof body === 'string' ? body : JSON.stringify(body);
+        }
+        const response = await fetch(path, options);
+        const text = await response.text();
+        try {
+          output.textContent = JSON.stringify(JSON.parse(text), null, 2);
+        } catch (_) {
+          output.textContent = text;
+        }
+      }
+      for (const button of document.querySelectorAll('[data-get]')) {
+        button.addEventListener('click', () => request('GET', button.dataset.get));
+      }
+      for (const button of document.querySelectorAll('[data-post]')) {
+        button.addEventListener('click', () => request('POST', button.dataset.post));
+      }
+      for (const button of document.querySelectorAll('[data-post-json]')) {
+        button.addEventListener('click', () => request('POST', button.dataset.postJson, button.dataset.json));
+      }
+      document.querySelector('#custom-get').addEventListener('click', () => request('GET', document.querySelector('#custom-path').value));
+      document.querySelector('#custom-post').addEventListener('click', () => request('POST', document.querySelector('#custom-path').value, document.querySelector('#custom-body').value));
+      document.querySelector('#custom-profile-qr').addEventListener('click', () => request('POST', '/api/profile/qr', document.querySelector('#custom-body').value));
+    </script>
+  </body>
+</html>

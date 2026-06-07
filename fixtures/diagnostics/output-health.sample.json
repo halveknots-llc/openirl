@@ -1,0 +1,9 @@
+{
+  "classification": "input-vs-obs-vs-output",
+  "signals": [
+    "input_bitrate",
+    "obs_streaming",
+    "output_active",
+    "dropped_frames"
+  ]
+}

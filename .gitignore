@@ -1,0 +1,12 @@
+/target/
+**/*.rs.bk
+.env
+.env.*
+*.log
+.DS_Store
+._*
+/dist/
+/artifacts/
+/openirl-support-bundles/
+/.idea/
+/.vscode/

@@ -1,0 +1,18 @@
+# HELP paths Active MediaMTX paths by state.
+# TYPE paths gauge
+paths{name="openirl-main",state="ready"} 1
+# HELP paths_bytes_received Bytes received by paths.
+# TYPE paths_bytes_received counter
+paths_bytes_received{name="openirl-main",state="ready"} 500000
+# HELP paths_bytes_sent Bytes sent by paths.
+# TYPE paths_bytes_sent counter
+paths_bytes_sent{name="openirl-main",state="ready"} 450000
+# HELP srt_conns Active SRT connections.
+# TYPE srt_conns gauge
+srt_conns{id="pub-1",state="publish"} 1
+# HELP srt_conns_bytes_received SRT bytes received.
+# TYPE srt_conns_bytes_received counter
+srt_conns_bytes_received{id="pub-1",state="publish"} 500000
+# HELP srt_conns_bytes_sent SRT bytes sent.
+# TYPE srt_conns_bytes_sent counter
+srt_conns_bytes_sent{id="pub-1",state="publish"} 450000

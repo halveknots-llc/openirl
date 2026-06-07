@@ -1,0 +1,21 @@
+[package]
+name = "openirl-relay"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+openirl-core = { path = "../../crates/openirl-core" }
+openirl-config = { path = "../../crates/openirl-config" }
+openirl-relay-control = { path = "../../crates/openirl-relay-control" }
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

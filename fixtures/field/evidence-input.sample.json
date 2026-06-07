@@ -1,0 +1,19 @@
+{
+  "moblin_profile_imported": true,
+  "moblin_srt_connected": true,
+  "moblin_srtla_connected": false,
+  "irlpro_profile_imported": false,
+  "irlpro_srt_connected": false,
+  "irlpro_srtla_connected": false,
+  "belabox_profile_saved": false,
+  "belabox_srtla_connected": false,
+  "relay_ingest_seen": true,
+  "relay_metrics_seen": true,
+  "health_samples_recorded": true,
+  "brownout_triggered": true,
+  "fallback_scene_verified": true,
+  "recovery_to_live_verified": true,
+  "obs_stream_active_verified": false,
+  "support_bundle_exported": true,
+  "field_report_saved": true
+}

@@ -1,0 +1,16 @@
+# Minimal MediaMTX config for OpenIRL relay process supervision.
+# Tune these ports before exposing any relay beyond localhost/VPN.
+api: yes
+apiAddress: 127.0.0.1:9997
+metrics: yes
+metricsAddress: 127.0.0.1:9998
+rtmp: yes
+rtmpAddress: :1935
+srt: yes
+srtAddress: :9000
+webrtc: yes
+webrtcAddress: :8889
+hls: no
+paths:
+  all:
+    source: publisher

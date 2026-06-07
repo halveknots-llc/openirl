@@ -1,0 +1,47 @@
+[package]
+name = "openirl-agent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+obs-websocket = ["openirl-obs/obs-websocket"]
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+clap.workspace = true
+openirl-auth = { path = "../../crates/openirl-auth" }
+openirl-alpha-validation = { path = "../../crates/openirl-alpha-validation" }
+openirl-artifacts = { path = "../../crates/openirl-artifacts" }
+openirl-desktop-shell = { path = "../../crates/openirl-desktop-shell" }
+openirl-field-validation = { path = "../../crates/openirl-field-validation" }
+openirl-installer = { path = "../../crates/openirl-installer" }
+openirl-config = { path = "../../crates/openirl-config" }
+openirl-core = { path = "../../crates/openirl-core" }
+openirl-diagnostics = { path = "../../crates/openirl-diagnostics" }
+openirl-health = { path = "../../crates/openirl-health" }
+openirl-metrics = { path = "../../crates/openirl-metrics" }
+openirl-obs = { path = "../../crates/openirl-obs" }
+openirl-release = { path = "../../crates/openirl-release" }
+openirl-qr = { path = "../../crates/openirl-qr" }
+openirl-production = { path = "../../crates/openirl-production" }
+openirl-onboarding = { path = "../../crates/openirl-onboarding" }
+openirl-profiles = { path = "../../crates/openirl-profiles" }
+openirl-relay-control = { path = "../../crates/openirl-relay-control" }
+openirl-session = { path = "../../crates/openirl-session" }
+openirl-v1 = { path = "../../crates/openirl-v1" }
+openirl-scene-templates = { path = "../../crates/openirl-scene-templates" }
+serde.workspace = true
+serde_json.workspace = true
+time.workspace = true
+tokio.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true
