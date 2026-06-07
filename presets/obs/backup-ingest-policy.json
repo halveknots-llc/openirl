@@ -1,0 +1,6 @@
+{
+  "primary": "openirl-main",
+  "backup": "openirl-backup",
+  "automatic_failover": true,
+  "return_to_primary_after_stable_ms": 15000
+}

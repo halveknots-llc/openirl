@@ -1,0 +1,16 @@
+{
+  "static_validation_passed": true,
+  "rust_ci_passed": false,
+  "config_ok": true,
+  "agent_health_ok": true,
+  "dashboard_loaded": true,
+  "obs_connected": false,
+  "obs_scene_switch_verified": false,
+  "obs_streaming_start_stop_verified": false,
+  "replay_save_verified": false,
+  "recording_controls_verified": false,
+  "profile_qr_tested": false,
+  "metrics_poll_verified": true,
+  "windows_portable_built": false,
+  "windows_msi_reviewed": false
+}

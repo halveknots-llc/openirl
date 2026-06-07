@@ -1,0 +1,10 @@
+{
+  "scenarios": [
+    "healthy",
+    "degraded",
+    "brownout",
+    "offline",
+    "recovery-pending"
+  ],
+  "hysteresis_ms": 15000
+}

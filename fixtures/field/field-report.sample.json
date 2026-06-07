@@ -1,0 +1,53 @@
+{
+  "operator": "alpha-operator",
+  "location_label": "coarse-test-area",
+  "encoder": "moblin",
+  "protocol": "srt",
+  "deployment_mode": "local-direct",
+  "duration_minutes": 20,
+  "networks": ["cellular-a", "wifi-a"],
+  "evidence": {
+    "moblin_profile_imported": true,
+    "moblin_srt_connected": true,
+    "moblin_srtla_connected": false,
+    "irlpro_profile_imported": false,
+    "irlpro_srt_connected": false,
+    "irlpro_srtla_connected": false,
+    "belabox_profile_saved": false,
+    "belabox_srtla_connected": false,
+    "relay_ingest_seen": true,
+    "relay_metrics_seen": true,
+    "health_samples_recorded": true,
+    "brownout_triggered": true,
+    "fallback_scene_verified": true,
+    "recovery_to_live_verified": true,
+    "obs_stream_active_verified": false,
+    "support_bundle_exported": true,
+    "field_report_saved": true
+  },
+  "observations": [
+    {
+      "timestamp_ms": 1000,
+      "source": "field-baseline",
+      "input_bitrate_kbps": 4800,
+      "packet_loss_percent": 0.5,
+      "rtt_ms": 90,
+      "connected_links": 1,
+      "health_state": "healthy",
+      "obs_scene": "live",
+      "note": "baseline before movement"
+    },
+    {
+      "timestamp_ms": 9000,
+      "source": "field-brownout",
+      "input_bitrate_kbps": 850,
+      "packet_loss_percent": 9.0,
+      "rtt_ms": 760,
+      "connected_links": 1,
+      "health_state": "brownout",
+      "obs_scene": "low-signal",
+      "note": "controlled weak signal segment"
+    }
+  ],
+  "notes": ["Sample fixture; replace with real field notes."]
+}

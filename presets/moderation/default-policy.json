@@ -1,0 +1,21 @@
+{
+  "roles": {
+    "owner": [
+      "all"
+    ],
+    "producer": [
+      "scene",
+      "recording",
+      "replay",
+      "marker"
+    ],
+    "moderator": [
+      "marker",
+      "brb",
+      "privacy-request"
+    ],
+    "view-only": [
+      "status"
+    ]
+  }
+}

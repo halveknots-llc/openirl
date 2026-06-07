@@ -1,0 +1,11 @@
+api: yes
+apiAddress: 127.0.0.1:9997
+metrics: yes
+metricsAddress: 127.0.0.1:9998
+srtAddress: :9000
+rtmpAddress: :1935
+paths:
+  openirl-main:
+    source: publisher
+  openirl-backup:
+    source: publisher

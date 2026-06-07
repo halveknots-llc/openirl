@@ -1,0 +1,9 @@
+serverAddr = "relay.example.com"
+serverPort = 7000
+
+[[proxies]]
+name = "openirl-srt"
+type = "udp"
+localIP = "127.0.0.1"
+localPort = 9000
+remotePort = 9000

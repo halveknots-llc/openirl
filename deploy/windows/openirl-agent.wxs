@@ -1,0 +1,29 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="OpenIRL Agent" Manufacturer="OpenIRL Contributors" Version="0.1.0.0" UpgradeCode="11111111-1111-1111-1111-111111111111">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of OpenIRL Agent is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="Main" Title="OpenIRL Agent" Level="1">
+      <ComponentGroupRef Id="OpenIRLFiles" />
+    </Feature>
+  </Package>
+
+  <Fragment>
+    <StandardDirectory Id="ProgramFilesFolder">
+      <Directory Id="INSTALLFOLDER" Name="OpenIRL" />
+    </StandardDirectory>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="OpenIRLFiles" Directory="INSTALLFOLDER">
+      <Component Id="OpenIRLAgentExe" Guid="22222222-2222-2222-2222-222222222222">
+        <File Id="OpenIRLAgentFile" Source="..\..\dist\windows\openirl-agent.exe" KeyPath="yes" />
+        <ServiceInstall Id="OpenIRLAgentService" Type="ownProcess" Name="OpenIRLAgent" DisplayName="OpenIRL Agent" Description="Local-first IRL streaming control plane" Start="auto" ErrorControl="normal" Arguments="serve --config &quot;[CommonAppDataFolder]OpenIRL\openirl.toml&quot;" />
+        <ServiceControl Id="OpenIRLAgentServiceControl" Name="OpenIRLAgent" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+      </Component>
+      <Component Id="OpenIRLDesktopExe" Guid="33333333-3333-3333-3333-333333333333">
+        <File Id="OpenIRLDesktopFile" Source="..\..\dist\windows\openirl-desktop.exe" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

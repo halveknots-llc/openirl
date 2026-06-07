@@ -1,0 +1,5 @@
+{
+  "mode": "srtla2",
+  "compatible_with_legacy_srtla": false,
+  "requires_sender_and_receiver_upgrade": true
+}

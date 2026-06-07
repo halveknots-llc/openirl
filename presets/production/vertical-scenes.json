@@ -1,0 +1,11 @@
+{
+  "canvas": {
+    "width": 1080,
+    "height": 1920
+  },
+  "scenes": [
+    "OpenIRL Vertical Live",
+    "OpenIRL Vertical BRB"
+  ],
+  "clip_folder": "clips/openirl"
+}

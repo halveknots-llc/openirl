@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    "OpenIRL Live",
+    "OpenIRL BRB",
+    "OpenIRL Low Signal",
+    "OpenIRL Backup Feed",
+    "OpenIRL Privacy"
+  ],
+  "transforms": {
+    "fit_to_canvas": true,
+    "lock_sources": true
+  }
+}

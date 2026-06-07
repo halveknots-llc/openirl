@@ -1,0 +1,4 @@
+[alias]
+xtask = "run --package xtask --"
+ci = "xtask ci"
+features = "run --package openirl-agent -- roadmap"
