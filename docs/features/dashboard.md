@@ -1,3 +1,40 @@
 # Dashboard
 
-This feature area is represented by Rust types, API surfaces, presets, docs, and smoke-test paths in this handoff package. Runtime validation should be performed on a machine with OBS, MediaMTX, and the relevant encoder or relay tools installed.
+The dashboard is the local operator surface for setup, stream state, OBS actions, profile generation, relay planning, and support exports. It is designed to start on localhost and require explicit configuration before broader network exposure.
+
+## Source Validation
+
+```bash
+cargo run --package openirl-agent -- check-config --config config/openirl.example.toml
+cargo run --package openirl-agent -- serve --config config/openirl.example.toml
+python3 scripts/smoke/api_smoke.py
+```
+
+Expected evidence:
+
+- `/health` reports `status: ok`
+- `/api/config/validation` reports no error findings for the example config
+- `/api/auth/status` reflects whether dashboard auth is enabled
+- `/api/runtime/readiness` and `/api/state` return redacted operator state
+
+## Auth Boundary
+
+Loopback dashboard access may be tokenless when `allow_loopback_without_token` is enabled. Non-loopback API requests require authorization when `require_auth_outside_localhost` is true. Public bind without auth must be rejected during config validation.
+
+Use this check when changing bind or auth behavior:
+
+```bash
+python3 scripts/security/security-audit-smoke.py
+```
+
+## Operator Workflow
+
+1. Validate the config.
+2. Start the agent on `127.0.0.1`.
+3. Open `http://127.0.0.1:7707`.
+4. Confirm redacted config, metrics status, OBS status, and support-bundle export.
+5. Only then test LAN access with a token and a deliberate bind.
+
+## Current Boundary
+
+API smoke checks prove source-level dashboard behavior. A phone-on-LAN test is still required before claiming mobile dashboard success in a specific network.

@@ -72,7 +72,7 @@ fallback_assets_dir = "artifacts/assets/fallback"
 obs_templates_dir = "artifacts/obs-templates"
 support_bundles_dir = "artifacts/support-bundles"
 field_reports_dir = "artifacts/field-reports"
-private_alpha_dir = "artifacts/private-alpha"
+alpha_package_dir = "artifacts/alpha-source-package"
 overwrite_existing = false
 
 [scenes]

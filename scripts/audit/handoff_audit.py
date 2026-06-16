@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Strict handoff audit for OpenIRL."""
+"""Strict source-readiness audit for OpenIRL."""
 from __future__ import annotations
 import json, re, shutil, sys, tomllib
 from pathlib import Path
@@ -34,20 +34,28 @@ def rel(path: Path) -> str:
 
 def text_files():
     for path in ROOT.rglob('*'):
+        if path.name.startswith('._'):
+            continue
         if path.is_file() and path.suffix.lower() in TEXT_SUFFIXES and 'target' not in path.parts and '.git' not in path.parts:
             yield path
 
 def main() -> int:
     findings=[]
     for path in ROOT.rglob('*.json'):
+        if path.name.startswith('._'):
+            continue
         if 'target' in path.parts: continue
         try: json.loads(path.read_text(encoding='utf-8'))
         except Exception as exc: findings.append({'path':rel(path),'category':'json','message':str(exc)})
     for path in ROOT.rglob('*.toml'):
+        if path.name.startswith('._'):
+            continue
         if 'target' in path.parts: continue
         try: tomllib.loads(path.read_text(encoding='utf-8'))
         except Exception as exc: findings.append({'path':rel(path),'category':'toml','message':str(exc)})
     for path in ROOT.rglob('*.rs'):
+        if path.name.startswith('._'):
+            continue
         if 'target' in path.parts: continue
         text=path.read_text(encoding='utf-8', errors='replace')
         for name,pat in DENIED_CODE.items():
@@ -72,13 +80,13 @@ def main() -> int:
     required_docs = ['docs/features/obs-reconciliation.md','docs/features/local-ingest.md','docs/features/encoder-profiles.md','docs/features/dashboard.md','docs/features/security.md','docs/features/brownout.md','docs/VALIDATION.md','docs/RELEASE_CHECKLIST.md']
     for item in required_docs:
         if not (ROOT/item).exists():
-            findings.append({'path':item,'category':'inventory','message':'required handoff doc missing'})
+            findings.append({'path':item,'category':'inventory','message':'required source-readiness doc missing'})
     report={'status':'pass' if not findings else 'fail','findings':findings,'tooling':{tool:shutil.which(tool) for tool in ['cargo','rustc','rustfmt']}}
     out_json=ROOT/'audit/handoff-audit.json'
     out_md=ROOT/'audit/HANDOFF_AUDIT.md'
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(report, indent=2, sort_keys=True), encoding='utf-8')
-    out_md.write_text('# OpenIRL Handoff Audit\n\n**Status:** '+report['status'].upper()+'\n\nFindings: '+str(len(findings))+'\n', encoding='utf-8')
+    out_md.write_text('# OpenIRL Source Readiness Audit\n\n**Status:** '+report['status'].upper()+'\n\nFindings: '+str(len(findings))+'\n', encoding='utf-8')
     print('handoff audit:', report['status'])
     if findings:
         for item in findings[:80]:

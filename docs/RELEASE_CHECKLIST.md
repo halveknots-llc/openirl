@@ -3,7 +3,7 @@
 ## Source package
 
 - Static validation passes.
-- Handoff audit passes.
+- Source-readiness audit passes through `python3 scripts/audit/handoff_audit.py`.
 - JSON and TOML files parse.
 - No legacy numbered pass labels remain.
 - No unfinished markers remain.
@@ -11,10 +11,10 @@
 
 ## Rust package
 
-- `cargo xtask ci` passes.
 - `cargo fmt --all -- --check` passes.
-- `cargo clippy --workspace --all-targets` passes.
+- `cargo clippy --workspace --all-targets -- -D warnings` passes.
 - `cargo test --workspace` passes.
+- `cargo xtask ci` passes.
 
 ## Runtime package
 

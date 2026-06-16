@@ -243,7 +243,7 @@ pub fn build_field_validation_plan(schema_revision: u16) -> FieldValidationPlan 
             check("brownout", FieldStage::BrownoutRecovery, None, "Brownout transition", "Simulate or create uplink degradation with the real device connected.", "Health engine records brownout and BRB/fallback behavior.", true),
             check("recovery", FieldStage::BrownoutRecovery, None, "Recovery transition", "Restore stable network after brownout.", "Health engine records recovery and return-to-live readiness.", true),
             check("support-bundle", FieldStage::Diagnostics, None, "Support bundle", "Capture /api/session/support-bundle after the field run.", "Bundle includes metrics, OBS, relay, field, and redacted config context.", true),
-            check("field-report", FieldStage::Evidence, None, "Field report", "Write the private alpha field report from captured artifacts.", "Report identifies device, path, failure mode, recovery time, and blockers.", true),
+            check("field-report", FieldStage::Evidence, None, "Field report", "Write the alpha field report from captured artifacts.", "Report identifies device, path, failure mode, recovery time, and blockers.", true),
         ],
         evidence: vec![
             evidence("field-evidence-json", "Operator-submitted field evidence", "artifacts/field/field-evidence.json", true),

@@ -1,11 +1,12 @@
 //! OpenIRL local agent.
 
-use anyhow::Context;
+use anyhow::{Context, bail};
 use axum::{
     Json, Router,
-    extract::{FromRequestParts, Path, State},
+    extract::{ConnectInfo, FromRequestParts, Path, Request, State},
     http::{StatusCode, header::AUTHORIZATION, request::Parts},
-    response::IntoResponse,
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
     routing::{get, post},
 };
 use clap::{Parser, Subcommand, ValueEnum};
@@ -14,9 +15,9 @@ use openirl_alpha_validation::{
     evaluate_alpha_evidence,
 };
 use openirl_artifacts::{
-    SupportBundleExportRequest, build_obs_scene_template_plan, default_fallback_asset_plan,
-    export_field_report_markdown, export_support_bundle, materialize_fallback_assets,
-    materialize_obs_scene_template, materialize_private_alpha_layout, private_alpha_package_layout,
+    SupportBundleExportRequest, alpha_source_package_layout, build_obs_scene_template_plan,
+    default_fallback_asset_plan, export_field_report_markdown, export_support_bundle,
+    materialize_alpha_source_layout, materialize_fallback_assets, materialize_obs_scene_template,
 };
 use openirl_auth::{AuthPolicy, auth_status, verify_authorization_header};
 use openirl_config::{
@@ -24,8 +25,8 @@ use openirl_config::{
     RelayProcessKind as ConfigRelayProcessKind, RelaySupervisorMode, load_config, validate_config,
 };
 use openirl_core::{
-    EncoderKind, HANDOFF_PHASE_COUNT, HealthDecision, HealthState, Protocol, SceneBundle,
-    SceneRole, StreamMetrics, handoff_phases,
+    EncoderKind, HealthDecision, HealthState, INITIAL_FEATURE_AREA_COUNT, Protocol, SceneBundle,
+    SceneRole, StreamMetrics, feature_areas,
 };
 use openirl_desktop_shell::default_desktop_shell_plan;
 use openirl_diagnostics::SupportBundleManifest;
@@ -58,8 +59,14 @@ use openirl_v1::{
     V1EvidenceInput, build_v1_features, build_v1_implementation_summary, default_v1_package_layout,
     evaluate_v1_evidence, materialize_v1_package, sample_v1_evidence,
 };
+use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::{io::Read, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{
+    io::Read,
+    net::SocketAddr,
+    path::{Component, PathBuf},
+    sync::{Arc, OnceLock},
+};
 use time::OffsetDateTime;
 use tokio::{
     sync::RwLock,
@@ -371,7 +378,7 @@ enum ArtifactCommand {
         #[arg(long)]
         field_report: Option<PathBuf>,
     },
-    /// Print or materialize private alpha package layout.
+    /// Print or materialize the alpha source package layout.
     AlphaLayout {
         /// Optional config path.
         #[arg(long)]
@@ -813,13 +820,17 @@ async fn main() -> anyhow::Result<()> {
                 field_report,
             } => {
                 let config = load_config_or_default(config)?;
-                let field_report_markdown = read_optional_text(field_report)?;
+                let field_report_markdown = read_optional_text(field_report)?.map(|report| {
+                    redact_support_text(&report, config.security.support_bundle_redact_ips)
+                });
                 let payload = serde_json::json!({
                     "generated_from": "openirl-agent artifacts support-bundle",
                     "schema_revision": OPENIRL_SCHEMA_REVISION,
                     "config": config.redacted(),
                     "config_validation": validate_config(&config),
                 });
+                let payload =
+                    scrub_support_bundle_value(payload, config.security.support_bundle_redact_ips);
                 let request = SupportBundleExportRequest {
                     output_dir: config.artifacts.support_bundles_dir.clone(),
                     field_report_markdown,
@@ -834,9 +845,9 @@ async fn main() -> anyhow::Result<()> {
             } => {
                 let config = load_config_or_default(config)?;
                 let layout =
-                    private_alpha_package_layout(config.artifacts.private_alpha_dir.clone());
+                    alpha_source_package_layout(config.artifacts.alpha_package_dir.clone());
                 if materialize {
-                    let result = materialize_private_alpha_layout(&layout)?;
+                    let result = materialize_alpha_source_layout(&layout)?;
                     println!("{}", serde_json::to_string_pretty(&result)?);
                 } else {
                     println!("{}", serde_json::to_string_pretty(&layout)?);
@@ -886,9 +897,9 @@ async fn main() -> anyhow::Result<()> {
             }
         },
         Command::Features => {
-            println!("Exact initial feature count: {HANDOFF_PHASE_COUNT}");
+            println!("Exact initial feature count: {INITIAL_FEATURE_AREA_COUNT}");
             println!("Current schema revision: {OPENIRL_SCHEMA_REVISION}");
-            println!("{}", serde_json::to_string_pretty(&handoff_phases())?);
+            println!("{}", serde_json::to_string_pretty(&feature_areas())?);
             Ok(())
         }
         Command::Profile {
@@ -1005,9 +1016,24 @@ async fn serve(
         config.obs.adapter = adapter.into();
     }
 
-    log_validation_report(&validate_config(&config));
+    if let Some(bind) = bind_override {
+        config.api.bind = bind;
+    }
 
-    let bind = bind_override.unwrap_or(config.api.bind);
+    let validation_report = validate_config(&config);
+    log_validation_report(&validation_report);
+    if !validation_report.ok {
+        let codes = validation_report
+            .issues
+            .iter()
+            .filter(|issue| issue.severity == openirl_config::ValidationSeverity::Error)
+            .map(|issue| issue.code.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        bail!("refusing to start with unsafe config: {codes}");
+    }
+
+    let bind = config.api.bind;
     let scene_bundle = config.scene_bundle();
     let obs = build_obs_controller(&config);
     if config.obs.create_missing_scenes {
@@ -1099,7 +1125,7 @@ async fn serve(
             "/api/metrics/poll-api/{source}",
             post(api_metrics_poll_api_named),
         )
-        .route("/api/handoff/phases", get(api_handoff_phases))
+        .route("/api/features/areas", get(api_feature_areas))
         .route("/api/evaluate", post(api_evaluate))
         .route("/api/profile", post(api_profile))
         .route("/api/profile/qr", post(api_profile_qr))
@@ -1184,6 +1210,10 @@ async fn serve(
             post(api_support_bundle_export),
         )
         .route("/api/session/reset", post(api_session_reset))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            require_api_auth,
+        ))
         .fallback_service(ServeDir::new("apps/openirl-agent/static"))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
@@ -1191,7 +1221,11 @@ async fn serve(
 
     tracing::info!(%bind, "serving OpenIRL agent");
     let listener = tokio::net::TcpListener::bind(bind).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }
 
@@ -1326,7 +1360,7 @@ fn backend_from_config_process(kind: ConfigRelayProcessKind, router: &str) -> Re
 struct HealthResponse {
     status: &'static str,
     started_at: String,
-    handoff_phase_count: u8,
+    feature_area_count: u8,
     schema_revision: u16,
 }
 
@@ -1334,13 +1368,13 @@ async fn health(State(state): State<ApiState>) -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
         started_at: state.started_at.to_string(),
-        handoff_phase_count: HANDOFF_PHASE_COUNT,
+        feature_area_count: INITIAL_FEATURE_AREA_COUNT,
         schema_revision: OPENIRL_SCHEMA_REVISION,
     })
 }
 
-async fn api_handoff_phases() -> Json<Vec<openirl_core::FeatureArea>> {
-    Json(handoff_phases())
+async fn api_feature_areas() -> Json<Vec<openirl_core::FeatureArea>> {
+    Json(feature_areas())
 }
 
 async fn api_config_redacted(
@@ -1404,8 +1438,20 @@ async fn api_runtime_readiness(State(state): State<ApiState>) -> impl IntoRespon
         }
     }
 
+    let agent_ready = blockers.is_empty();
+    let source_validated = false;
+    let live_ready = false;
+    warnings.push(
+        "source_validated and live_ready are never inferred from runtime state; use validation commands and live smoke evidence."
+            .to_string(),
+    );
+
     Json(serde_json::json!({
-        "ready": blockers.is_empty(),
+        "ready": agent_ready,
+        "ready_scope": "agent",
+        "agent_ready": agent_ready,
+        "source_validated": source_validated,
+        "live_ready": live_ready,
         "schema_revision": OPENIRL_SCHEMA_REVISION,
         "config": validation,
         "obs": obs_status,
@@ -1468,6 +1514,40 @@ fn auth_policy_from_config(config: &AppConfig) -> AuthPolicy {
     }
 }
 
+async fn require_api_auth(State(state): State<ApiState>, request: Request, next: Next) -> Response {
+    let path = request.uri().path();
+    if !path.starts_with("/api/") || matches!(path, "/api/auth/status" | "/api/auth/check") {
+        return next.run(request).await;
+    }
+
+    let policy = auth_policy_from_config(&state.config);
+    let token_value = std::env::var(&policy.token_env).ok();
+    let authorization = request
+        .headers()
+        .get(AUTHORIZATION)
+        .and_then(|value| value.to_str().ok());
+    let is_loopback_request = request_is_loopback(request.extensions(), &state);
+    let decision = verify_authorization_header(
+        &policy,
+        token_value.as_deref(),
+        authorization,
+        is_loopback_request,
+    );
+
+    if decision.allowed {
+        next.run(request).await
+    } else {
+        (StatusCode::UNAUTHORIZED, Json(serde_json::json!(decision))).into_response()
+    }
+}
+
+fn request_is_loopback(extensions: &axum::http::Extensions, state: &ApiState) -> bool {
+    extensions
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|connect_info| connect_info.0.ip().is_loopback())
+        .unwrap_or_else(|| state.config.api.bind.ip().is_loopback())
+}
+
 #[derive(Debug, Clone, Copy)]
 struct ControlAuth {
     role: ModeratorRole,
@@ -1486,7 +1566,7 @@ impl FromRequestParts<ApiState> for ControlAuth {
             .headers
             .get(AUTHORIZATION)
             .and_then(|value| value.to_str().ok());
-        let is_loopback_request = state.config.api.bind.ip().is_loopback();
+        let is_loopback_request = request_is_loopback(&parts.extensions, state);
         let decision = verify_authorization_header(
             &policy,
             token_value.as_deref(),
@@ -2086,9 +2166,9 @@ async fn api_state(State(state): State<ApiState>) -> impl IntoResponse {
             "plan_endpoint": "/api/production/plan"
         },
         "session": session,
-        "handoff": {
-            "handoff_phase_count": HANDOFF_PHASE_COUNT,
-            "ready_after_handoff": 8,
+        "features": {
+            "feature_area_count": INITIAL_FEATURE_AREA_COUNT,
+            "source_readiness_area_count": 8,
             "schema_revision": OPENIRL_SCHEMA_REVISION
         },
         "alpha": {
@@ -2693,7 +2773,7 @@ async fn field_evidence_from_runtime(state: &ApiState) -> FieldEvidenceInput {
         .unwrap_or(false);
 
     FieldEvidenceInput {
-        static_validation_passed: true,
+        static_validation_passed: false,
         rust_ci_passed: false,
         windows_alpha_ready: obs_connected && validation.ok,
         moblin_profile_generated: false,
@@ -2727,7 +2807,7 @@ async fn alpha_evidence_from_runtime(state: &ApiState) -> AlphaEvidenceInput {
     let validation = validate_config(&state.config);
     let latest_metrics = state.last_metrics_snapshot.read().await.clone();
     AlphaEvidenceInput {
-        static_validation_passed: true,
+        static_validation_passed: false,
         rust_ci_passed: false,
         config_ok: validation.ok,
         agent_health_ok: true,
@@ -2775,8 +2855,8 @@ async fn api_materialize_fallback_assets(
 }
 
 async fn api_alpha_package_layout(State(state): State<ApiState>) -> impl IntoResponse {
-    Json(private_alpha_package_layout(
-        state.config.artifacts.private_alpha_dir.clone(),
+    Json(alpha_source_package_layout(
+        state.config.artifacts.alpha_package_dir.clone(),
     ))
 }
 
@@ -2784,8 +2864,8 @@ async fn api_alpha_package_layout_materialize(
     State(state): State<ApiState>,
     _auth: ControlAuth,
 ) -> impl IntoResponse {
-    let layout = private_alpha_package_layout(state.config.artifacts.private_alpha_dir.clone());
-    match materialize_private_alpha_layout(&layout) {
+    let layout = alpha_source_package_layout(state.config.artifacts.alpha_package_dir.clone());
+    match materialize_alpha_source_layout(&layout) {
         Ok(result) => (StatusCode::OK, Json(serde_json::json!(result))),
         Err(error) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -2801,11 +2881,23 @@ async fn api_support_bundle_export(
 ) -> impl IntoResponse {
     let payload = support_bundle_payload(&state).await;
     let report = state.session.read().await.report();
+    let output_dir = match support_bundle_api_output_dir(
+        &state.config.artifacts.support_bundles_dir,
+        request.output_dir,
+    ) {
+        Ok(path) => path,
+        Err(error) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": error })),
+            );
+        }
+    };
     let export_request = SupportBundleExportRequest {
-        output_dir: request
-            .output_dir
-            .unwrap_or_else(|| state.config.artifacts.support_bundles_dir.clone()),
-        field_report_markdown: request.field_report_markdown,
+        output_dir,
+        field_report_markdown: request.field_report_markdown.map(|report| {
+            redact_support_text(&report, state.config.security.support_bundle_redact_ips)
+        }),
     };
 
     match export_support_bundle(&export_request, &payload, Some(report)) {
@@ -2815,6 +2907,50 @@ async fn api_support_bundle_export(
             Json(serde_json::json!({ "error": error.to_string() })),
         ),
     }
+}
+
+fn support_bundle_api_output_dir(
+    configured_root: &str,
+    requested: Option<String>,
+) -> Result<String, String> {
+    let Some(raw) = requested else {
+        return Ok(configured_root.to_string());
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("support bundle output_dir is empty".to_string());
+    }
+
+    let requested_path = PathBuf::from(trimmed);
+    if requested_path.is_absolute() {
+        return Err(
+            "support bundle API output_dir must be relative to the configured bundle root"
+                .to_string(),
+        );
+    }
+
+    let mut relative = PathBuf::new();
+    for component in requested_path.components() {
+        match component {
+            Component::Normal(part) => relative.push(part),
+            Component::CurDir => {}
+            _ => {
+                return Err(
+                    "support bundle API output_dir cannot contain parent or prefix components"
+                        .to_string(),
+                );
+            }
+        }
+    }
+
+    if relative.as_os_str().is_empty() {
+        return Err("support bundle output_dir is empty".to_string());
+    }
+
+    Ok(PathBuf::from(configured_root)
+        .join(relative)
+        .to_string_lossy()
+        .into_owned())
 }
 
 async fn api_field_report_export(
@@ -2831,6 +2967,10 @@ async fn api_field_report_export(
     } else {
         body
     };
+    let field_report_markdown = redact_support_text(
+        &field_report_markdown,
+        state.config.security.support_bundle_redact_ips,
+    );
     let field_report_result = match export_field_report_markdown(
         &state.config.artifacts.field_reports_dir,
         &field_report_markdown,
@@ -2925,7 +3065,7 @@ async fn support_bundle_payload(state: &ApiState) -> serde_json::Value {
         SupportBundleManifest::from_report(report, state.config.security.support_bundle_redact_ips);
     let obs_actions: Vec<String> = state.obs.action_log().await.unwrap_or_default();
     let token_value = std::env::var(&state.config.security.dashboard_token_env).ok();
-    serde_json::json!({
+    let payload = serde_json::json!({
         "manifest": manifest,
         "config": state.config.redacted(),
         "config_validation": validate_config(&state.config),
@@ -2958,7 +3098,143 @@ async fn support_bundle_payload(state: &ApiState) -> serde_json::Value {
         "release": build_release_manifest(env!("CARGO_PKG_VERSION"), OPENIRL_SCHEMA_REVISION, &validate_config(&state.config)),
         "auth": auth_status(&auth_policy_from_config(&state.config), token_value.as_deref()),
         "profile_support_matrix": support_matrix()
-    })
+    });
+    scrub_support_bundle_value(payload, state.config.security.support_bundle_redact_ips)
+}
+
+fn scrub_support_bundle_value(mut value: serde_json::Value, redact_ips: bool) -> serde_json::Value {
+    scrub_json_value(&mut value, redact_ips);
+    value
+}
+
+fn scrub_json_value(value: &mut serde_json::Value, redact_ips: bool) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, child) in map {
+                if support_bundle_secret_key(key) {
+                    *child = serde_json::Value::String("<redacted>".to_string());
+                } else {
+                    scrub_json_value(child, redact_ips);
+                }
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                scrub_json_value(item, redact_ips);
+            }
+        }
+        serde_json::Value::String(text) => {
+            *text = redact_support_text(text, redact_ips);
+        }
+        serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {}
+    }
+}
+
+fn support_bundle_secret_key(key: &str) -> bool {
+    let key = key.to_ascii_lowercase().replace('-', "_");
+    if key.ends_with("_env") || key.contains("without_token") {
+        return false;
+    }
+
+    key == "token"
+        || key.ends_with("_token")
+        || key.contains("access_token")
+        || key.contains("refresh_token")
+        || key.contains("dashboard_token")
+        || key.contains("password")
+        || key.contains("passphrase")
+        || key.contains("stream_key")
+        || key.contains("streamkey")
+        || key.contains("private_key")
+        || key.contains("authorization")
+        || key.contains("secret")
+}
+
+static PRIVATE_KEY_RE: OnceLock<Option<Regex>> = OnceLock::new();
+static BEARER_RE: OnceLock<Option<Regex>> = OnceLock::new();
+static URL_USERINFO_RE: OnceLock<Option<Regex>> = OnceLock::new();
+static QUERY_SECRET_RE: OnceLock<Option<Regex>> = OnceLock::new();
+static ASSIGNMENT_SECRET_RE: OnceLock<Option<Regex>> = OnceLock::new();
+static IPV4_RE: OnceLock<Option<Regex>> = OnceLock::new();
+
+fn cached_regex(
+    cell: &'static OnceLock<Option<Regex>>,
+    pattern: &'static str,
+) -> Option<&'static Regex> {
+    cell.get_or_init(|| Regex::new(pattern).ok()).as_ref()
+}
+
+fn redact_support_text(input: &str, redact_ips: bool) -> String {
+    let mut redacted = input.to_string();
+    redacted = replace_support_pattern(
+        &redacted,
+        &PRIVATE_KEY_RE,
+        r"(?is)-----BEGIN [^-]*PRIVATE KEY-----.*?-----END [^-]*PRIVATE KEY-----",
+        "[redacted-private-key]",
+    );
+    redacted = replace_support_pattern(
+        &redacted,
+        &BEARER_RE,
+        r"(?i)Bearer\s+[A-Za-z0-9._~+/=-]+",
+        "Bearer <redacted>",
+    );
+    redacted = replace_support_pattern(
+        &redacted,
+        &URL_USERINFO_RE,
+        r"(?i)(?P<prefix>[a-z][a-z0-9+.-]*://[^/\s:@]+:)[^@\s/]+@",
+        "${prefix}<redacted>@",
+    );
+    redacted = replace_support_pattern(
+        &redacted,
+        &QUERY_SECRET_RE,
+        r#"(?i)(?P<prefix>[?&](?:passphrase|token|stream[_-]?key|password|secret|authorization|auth)=)[^&\s"'<>)]*"#,
+        "${prefix}<redacted>",
+    );
+    redacted = replace_support_pattern(
+        &redacted,
+        &ASSIGNMENT_SECRET_RE,
+        r#"(?im)(?P<prefix>\b(?:password|passphrase|stream[_-]?key|secret|authorization|bearer[_-]?token|access[_-]?token|refresh[_-]?token|dashboard[_-]?token|obs[_-]?password)\b\s*[:=]\s*)["']?[^"',\n\r}]+["']?"#,
+        "${prefix}<redacted>",
+    );
+
+    if redact_ips {
+        redact_ip_addresses(&redacted)
+    } else {
+        redacted
+    }
+}
+
+fn replace_support_pattern(
+    input: &str,
+    cell: &'static OnceLock<Option<Regex>>,
+    pattern: &'static str,
+    replacement: &str,
+) -> String {
+    if let Some(regex) = cached_regex(cell, pattern) {
+        regex.replace_all(input, replacement).into_owned()
+    } else {
+        input.to_string()
+    }
+}
+
+fn redact_ip_addresses(input: &str) -> String {
+    let Some(regex) = cached_regex(
+        &IPV4_RE,
+        r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b",
+    ) else {
+        return input.to_string();
+    };
+
+    regex
+        .replace_all(input, |captures: &regex::Captures<'_>| {
+            let value = captures.get(0).map_or("", |capture| capture.as_str());
+            if value.starts_with("127.") || value == "0.0.0.0" {
+                value.to_string()
+            } else {
+                "<redacted-ip>".to_string()
+            }
+        })
+        .into_owned()
 }
 
 async fn api_session_reset(State(state): State<ApiState>, _auth: ControlAuth) -> impl IntoResponse {
@@ -3057,11 +3333,37 @@ fn artifact_plan_json(config: &AppConfig) -> serde_json::Value {
         "obs_scene_materialization": build_scene_materialization_plan(&bundle, &scene_template_request_from_config(config)),
         "support_bundle_dir": config.artifacts.support_bundles_dir.clone(),
         "field_reports_dir": config.artifacts.field_reports_dir.clone(),
-        "private_alpha_layout": private_alpha_package_layout(config.artifacts.private_alpha_dir.clone()),
+        "alpha_source_layout": alpha_source_package_layout(config.artifacts.alpha_package_dir.clone()),
     })
 }
 
 fn init_tracing() {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     fmt().with_env_filter(filter).init();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn support_bundle_api_output_dir_stays_under_configured_root() {
+        let resolved =
+            support_bundle_api_output_dir("artifacts/support-bundles", Some("issue-42".into()));
+        assert!(resolved.is_ok());
+        assert_eq!(
+            resolved.ok().as_deref(),
+            Some("artifacts/support-bundles/issue-42")
+        );
+
+        assert!(support_bundle_api_output_dir("artifacts/support-bundles", None).is_ok());
+        assert!(
+            support_bundle_api_output_dir("artifacts/support-bundles", Some("../escape".into()))
+                .is_err()
+        );
+        assert!(
+            support_bundle_api_output_dir("artifacts/support-bundles", Some("/tmp/export".into()))
+                .is_err()
+        );
+    }
 }

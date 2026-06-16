@@ -150,7 +150,8 @@ pub struct AlphaEvidenceReport {
     /// Report generation time.
     pub generated_at: OffsetDateTime,
     /// Overall readiness.
-    pub ready_for_private_alpha: bool,
+    #[serde(alias = "ready_for_private_alpha")]
+    pub ready_for_alpha_source: bool,
     /// Completed checks.
     pub completed: Vec<String>,
     /// Blocking missing checks.
@@ -431,7 +432,7 @@ pub fn evaluate_alpha_evidence(input: &AlphaEvidenceInput) -> AlphaEvidenceRepor
 
     AlphaEvidenceReport {
         generated_at: OffsetDateTime::now_utc(),
-        ready_for_private_alpha: blockers.is_empty(),
+        ready_for_alpha_source: blockers.is_empty(),
         completed,
         blockers,
         warnings,
@@ -532,7 +533,7 @@ mod tests {
             ..AlphaEvidenceInput::default()
         };
         let report = evaluate_alpha_evidence(&input);
-        assert!(!report.ready_for_private_alpha);
+        assert!(!report.ready_for_alpha_source);
         assert!(
             report
                 .blockers

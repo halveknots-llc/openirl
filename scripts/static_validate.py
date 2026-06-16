@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static validation for the OpenIRL handoff repository."""
+"""Static validation for the OpenIRL source repository."""
 from __future__ import annotations
 import json, re, sys, tomllib
 from pathlib import Path
@@ -27,6 +27,8 @@ LEGACY_WORD = joined(['w','a','v','e'])
 
 def files():
     for path in ROOT.rglob('*'):
+        if path.name.startswith('._'):
+            continue
         if path.is_file() and path.suffix.lower() in TEXT_SUFFIXES and 'target' not in path.parts and '.git' not in path.parts:
             yield path
 
@@ -36,10 +38,14 @@ def rel(path: Path) -> str:
 def main() -> int:
     findings=[]
     for path in ROOT.rglob('*.json'):
+        if path.name.startswith('._'):
+            continue
         if 'target' in path.parts: continue
         try: json.loads(path.read_text(encoding='utf-8'))
         except Exception as exc: findings.append((rel(path),'json',str(exc)))
     for path in ROOT.rglob('*.toml'):
+        if path.name.startswith('._'):
+            continue
         if 'target' in path.parts: continue
         try: tomllib.loads(path.read_text(encoding='utf-8'))
         except Exception as exc: findings.append((rel(path),'toml',str(exc)))
@@ -61,9 +67,10 @@ def main() -> int:
                     findings.append((f'{relative}:{idx}','marker',line.strip()[:160]))
                     break
     required = [
-        'README.md','CODEX_TASKS.md','Cargo.toml','apps/openirl-agent/src/main.rs',
+        'README.md','CONTRIBUTING.md','SECURITY.md','SUPPORT.md','LICENSE','Cargo.toml','apps/openirl-agent/src/main.rs',
         'crates/openirl-v1/src/lib.rs','docs/ARCHITECTURE.md','docs/SECURITY.md',
-        'docs/VALIDATION.md','docs/features/obs-reconciliation.md','scripts/audit/handoff_audit.py'
+        'docs/README.md','docs/VALIDATION.md','docs/MAINTAINER_CHECKS.md',
+        'docs/features/obs-reconciliation.md','scripts/audit/handoff_audit.py'
     ]
     for item in required:
         if not (ROOT/item).exists():

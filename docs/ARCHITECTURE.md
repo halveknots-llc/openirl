@@ -18,7 +18,7 @@ OpenIRL Agent ---- obs-websocket ---- OBS Studio
 
 ## Rust crates
 
-- `openirl-core` defines protocols, encoders, deployment modes, health states, scenes, stream metrics, and the handoff feature plan.
+- `openirl-core` defines protocols, encoders, deployment modes, health states, scenes, stream metrics, and the feature plan.
 - `openirl-health` evaluates stream metrics and recommends scenes.
 - `openirl-obs` provides the OBS controller trait, review controller, and WebSocket adapter.
 - `openirl-metrics` parses Prometheus/OpenMetrics text and converts router data into stream metrics.

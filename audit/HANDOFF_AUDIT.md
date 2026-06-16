@@ -1,4 +1,4 @@
-# OpenIRL Handoff Audit
+# OpenIRL Source Readiness Audit
 
 **Status:** PASS
 

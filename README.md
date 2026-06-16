@@ -47,7 +47,7 @@ OpenIRL intentionally keeps media engines process-bound. Rust coordinates config
 
 ## Current Status
 
-OpenIRL is a private-alpha Rust package with automated validation for the local agent, API contracts, config model, feature catalog, profile generation, support artifacts, and safety rules.
+OpenIRL is public source with an alpha runtime package. The repository includes automated validation for the local agent, API contracts, config model, feature catalog, profile generation, support artifacts, and safety rules.
 
 The source package includes live smoke scripts for OBS, MediaMTX, relay, mobile encoder, tunnel, and Windows packaging environments. Those checks require the real external tools and devices. Do not treat automated Rust/API validation as proof that a specific OBS profile, MediaMTX host, mobile phone, BELABOX, SRTLA deployment, or Windows installer has passed in your environment until the matching smoke script has run there.
 
@@ -88,6 +88,7 @@ xtask/                       repository validation task runner
 ```bash
 python3 scripts/static_validate.py
 python3 scripts/audit/handoff_audit.py
+python3 scripts/security/security-audit-smoke.py
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
@@ -192,6 +193,7 @@ Switch to live OBS only when OBS WebSocket is enabled and password-protected. Sw
 - [BELABOX](docs/hardware/belabox.md)
 - [Relay guide](docs/guides/relay.md)
 - [Quickstart](docs/guides/quickstart.md)
+- [Documentation index](docs/README.md)
 - [No-video troubleshooting](docs/troubleshooting/no-video.md)
 
 ## Feature Docs
@@ -205,6 +207,7 @@ OpenIRL is organized around feature-level docs instead of pass logs:
 - [Security](docs/features/security.md)
 - [Brownout](docs/features/brownout.md)
 - [Support bundles](docs/features/support-bundles.md)
+- [Alpha source package](docs/features/alpha-source-package.md)
 - [Backup ingest](docs/features/backup-ingest.md)
 - [Self-hosted relay](docs/features/self-hosted-relay.md)
 - [NAT and tunnels](docs/features/nat-tunnel.md)
@@ -215,11 +218,12 @@ OpenIRL is organized around feature-level docs instead of pass logs:
 
 ## Development Workflow
 
-1. Read [AGENTS.md](AGENTS.md) before changing code or claims.
-2. Keep docs, config, API behavior, and validation scripts aligned.
-3. Run the smallest relevant check after a focused change.
-4. Run `cargo xtask ci` before publishing a broad package change.
-5. When touching live integrations, record which real external tools and devices were used.
+1. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+2. Use [AGENTS.md](AGENTS.md) as automation guidance when working with coding agents.
+3. Keep docs, config, API behavior, and validation scripts aligned.
+4. Run the smallest relevant check after a focused change.
+5. Run `cargo xtask ci` before publishing a broad package change.
+6. When touching live integrations, record which real external tools and devices were used.
 
 The workspace uses Rust 2024, inherited lints, and `cargo xtask ci` as the broad validation gate.
 
@@ -239,4 +243,4 @@ Avoid changing release or readiness language unless the code, docs, and commands
 
 ## License
 
-OpenIRL is distributed under dual MIT and Apache-2.0 licensing. See [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE).
+OpenIRL is distributed under dual MIT and Apache-2.0 licensing. See [LICENSE](LICENSE), [LICENSE-MIT](LICENSE-MIT), and [LICENSE-APACHE](LICENSE-APACHE).

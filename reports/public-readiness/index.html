@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenIRL Public Readiness Log</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #151515;
+      --muted: #5b6370;
+      --paper: #fbfaf7;
+      --panel: #ffffff;
+      --line: #d8d6cf;
+      --accent: #0b6bcb;
+      --good: #197b45;
+      --warn: #a45c00;
+      --risk: #a52727;
+      --code: #f2f5f8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+    .wrap {
+      width: min(1120px, calc(100vw - 32px));
+      margin: 0 auto;
+    }
+    .hero {
+      display: grid;
+      gap: 18px;
+      padding: 36px 0 28px;
+    }
+    h1, h2, h3 { line-height: 1.15; margin: 0; }
+    h1 { font-size: clamp(2rem, 4vw, 4.2rem); letter-spacing: 0; }
+    h2 { font-size: 1.35rem; margin-bottom: 12px; }
+    h3 { font-size: 1rem; margin-bottom: 6px; }
+    p { margin: 0; }
+    .subtitle {
+      max-width: 850px;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      background: #fff;
+      color: var(--muted);
+      font-size: .88rem;
+    }
+    main {
+      display: grid;
+      gap: 22px;
+      padding: 26px 0 56px;
+    }
+    section {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 20px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .metric {
+      border-left: 4px solid var(--accent);
+      padding: 10px 12px;
+      background: #f7fafd;
+    }
+    .metric strong {
+      display: block;
+      font-size: 1.6rem;
+      line-height: 1;
+    }
+    .metric span { color: var(--muted); font-size: .9rem; }
+    .status-list {
+      display: grid;
+      gap: 10px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    .status-list li {
+      display: grid;
+      gap: 4px;
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+    }
+    .status-list li:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+    .tag {
+      display: inline-flex;
+      width: fit-content;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: .78rem;
+      font-weight: 650;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .tag.good { color: #fff; background: var(--good); }
+    .tag.warn { color: #fff; background: var(--warn); }
+    .tag.risk { color: #fff; background: var(--risk); }
+    code {
+      border-radius: 4px;
+      padding: 2px 4px;
+      background: var(--code);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .92em;
+    }
+    .timeline {
+      display: grid;
+      gap: 16px;
+    }
+    .entry {
+      display: grid;
+      gap: 10px;
+      border-left: 3px solid var(--accent);
+      padding-left: 14px;
+    }
+    .entry time {
+      color: var(--muted);
+      font-size: .88rem;
+      font-weight: 650;
+    }
+    .entry ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+    figure {
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #f5f6f7;
+    }
+    figure img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    figcaption {
+      padding: 9px 12px;
+      color: var(--muted);
+      font-size: .88rem;
+      background: #fff;
+      border-top: 1px solid var(--line);
+    }
+    @media (max-width: 760px) {
+      .grid { grid-template-columns: 1fr; }
+      section { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap hero">
+      <div class="meta">
+        <span class="pill">Repository: OpenIRL</span>
+        <span class="pill">Branch: main</span>
+        <span class="pill">Goal: public open-source launch</span>
+      </div>
+      <h1>Public Readiness Log</h1>
+      <p class="subtitle">A durable, timestamped working page for the launch-readiness push. It records evidence, visible artifacts, validation status, and remaining release risks as the repository is polished for a public open-source audience.</p>
+    </div>
+  </header>
+  <main class="wrap">
+    <section aria-labelledby="snapshot-heading">
+      <h2 id="snapshot-heading">Current Snapshot</h2>
+      <div class="grid">
+        <div class="metric">
+          <strong>7/7</strong>
+          <span>Source and security readiness commands passed</span>
+        </div>
+        <div class="metric">
+          <strong>2</strong>
+          <span>Additional readiness audits completed this pass</span>
+        </div>
+        <div class="metric">
+          <strong>Private</strong>
+          <span>GitHub remote visibility before publication</span>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="checks-heading">
+      <h2 id="checks-heading">Launch Surface</h2>
+      <ul class="status-list">
+        <li>
+          <span class="tag good">Complete</span>
+          <strong>Front door and licenses</strong>
+          <p>Repository now has <code>README.md</code>, a root <code>LICENSE</code> selector, full <code>LICENSE-MIT</code>, and full <code>LICENSE-APACHE</code>.</p>
+        </li>
+        <li>
+          <span class="tag good">Complete</span>
+          <strong>Operator docs</strong>
+          <p>Guides, feature docs, security docs, runbooks, validation docs, and a docs index are present under <code>docs/</code>.</p>
+        </li>
+        <li>
+          <span class="tag good">Complete</span>
+          <strong>Public package metadata</strong>
+          <p>The workspace metadata points at the public GitHub repository and includes description, README, keywords, and categories.</p>
+        </li>
+        <li>
+          <span class="tag good">Complete</span>
+          <strong>Automated and live validation split</strong>
+          <p>The launch spec and docs keep local automated validation separate from OBS, MediaMTX, mobile encoder, BELABOX, SRTLA, tunnel, and Windows-host evidence.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="timeline-heading">
+      <h2 id="timeline-heading">Timestamped Updates</h2>
+      <div class="timeline">
+        <article class="entry">
+          <time datetime="2026-06-16T13:10:32-07:00">2026-06-16 13:10:32 PDT</time>
+          <h3>Readiness run opened</h3>
+          <ul>
+            <li>Confirmed current checkout on the external development volume.</li>
+            <li>Confirmed git state started clean on <code>main</code> tracking <code>origin/main</code>.</li>
+            <li>Read repo instructions and validation requirements in <code>AGENTS.md</code>.</li>
+            <li>Started parallel audits for docs/community, CI/release metadata, and security/local-first safety.</li>
+          </ul>
+          <figure>
+            <img src="assets/initial-progress-page.png" alt="Initial OpenIRL public readiness log rendered in a browser">
+            <figcaption>Initial rendered progress page captured after the first repository inspection.</figcaption>
+          </figure>
+        </article>
+        <article class="entry">
+          <time datetime="2026-06-16T13:17:07-07:00">2026-06-16 13:17:07 PDT</time>
+          <h3>Public front-door patch landed</h3>
+          <ul>
+            <li>Replaced short-form license files with full MIT and Apache-2.0 texts and added a root <code>LICENSE</code> selector.</li>
+            <li>Updated workspace package metadata from temporary URLs to <code>https://github.com/halveknots-llc/openirl</code>.</li>
+            <li>Added <code>CONTRIBUTING.md</code>, <code>CODE_OF_CONDUCT.md</code>, <code>SECURITY.md</code>, <code>SUPPORT.md</code>, GitHub issue templates, and a pull request template.</li>
+            <li>Added <code>docs/README.md</code>, expanded <code>docs/guides/quickstart.md</code>, rewrote <code>CHANGELOG.md</code>, and aligned alpha status language.</li>
+            <li>Changed <code>cargo xtask ci</code> and GitHub Actions to use the broad validation gate with Clippy warnings denied.</li>
+            <li>Validation passed: <code>python3 scripts/static_validate.py</code> and <code>python3 scripts/audit/handoff_audit.py</code>.</li>
+          </ul>
+          <figure>
+            <img src="assets/front-door-patch.png" alt="Updated OpenIRL public readiness log after front-door implementation work">
+            <figcaption>Rendered progress page after public-front-door implementation and the first two validation passes.</figcaption>
+          </figure>
+        </article>
+        <article class="entry">
+          <time datetime="2026-06-16T13:27:35-07:00">2026-06-16 13:27:35 PDT</time>
+          <h3>Security and validation pass completed</h3>
+          <ul>
+            <li>Applied bind overrides before config validation and made unsafe config errors stop agent startup.</li>
+            <li>Added non-loopback auth middleware for <code>/api/*</code> routes while preserving explicit auth status/check endpoints.</li>
+            <li>Changed control auth to use the actual peer address when Axum connect info is available.</li>
+            <li>Added a final support-bundle scrub pass for JSON payloads and field-report markdown.</li>
+            <li>Changed release gates so script or file existence no longer reports security or live dependency success.</li>
+            <li>Expanded <code>scripts/security/security-audit-smoke.py</code> to validate default config, prove unsafe bind override rejection, and verify support-bundle canary redaction.</li>
+            <li>Validation passed: static validation, handoff audit, format check, Clippy with warnings denied, workspace tests, security smoke, and <code>cargo xtask ci</code>.</li>
+          </ul>
+          <figure>
+            <img src="assets/security-validation-pass.png" alt="OpenIRL public readiness log after security implementation and validation pass">
+            <figcaption>Rendered progress page after security hardening and full repository validation passed.</figcaption>
+          </figure>
+        </article>
+        <article class="entry">
+          <time datetime="2026-06-16T13:47:58-07:00">2026-06-16 13:47:58 PDT</time>
+          <h3>Public-readiness hardening pass completed</h3>
+          <ul>
+            <li>Expanded first-tier operator docs for OBS reconciliation, local ingest, dashboard, encoder profiles, support bundles, relay operation, no-video troubleshooting, Moblin, IRL Pro, and BELABOX.</li>
+            <li>Renamed legacy alpha package wording to alpha source package language across docs, config, release metadata, generated package output, and active API responses.</li>
+            <li>Added AppleDouble sidecar skipping to static validation and the source-readiness audit so macOS external-volume metadata does not mask real findings.</li>
+            <li>Added <code>python3 scripts/security/security-audit-smoke.py</code> to <code>cargo xtask ci</code> and to contributor validation docs.</li>
+            <li>Changed runtime readiness to split agent readiness, source validation, and live dependency readiness instead of inferring live proof from a running process.</li>
+            <li>Changed release compatibility status for OBS, MediaMTX, Moblin, IRL Pro, and BELABOX to <code>requires-live-validation</code>.</li>
+            <li>Changed live smoke scripts to fail closed unless an operator explicitly opts into a real dependency run.</li>
+            <li>Constrained support-bundle API exports to relative paths under the configured bundle root and added a focused unit test for path rejection.</li>
+            <li>Validation passed: static validation, source-readiness audit, security smoke, format check, Clippy with warnings denied, workspace tests, and <code>cargo xtask ci</code>.</li>
+          </ul>
+          <figure>
+            <img src="assets/public-readiness-hardening.png" alt="OpenIRL public readiness log after docs, validation, and security hardening">
+            <figcaption>Rendered progress page after public-readiness hardening and broad validation passed.</figcaption>
+          </figure>
+        </article>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

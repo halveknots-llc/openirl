@@ -584,8 +584,9 @@ pub struct ArtifactsConfig {
     pub support_bundles_dir: String,
     /// Field report output directory.
     pub field_reports_dir: String,
-    /// Private alpha package layout directory.
-    pub private_alpha_dir: String,
+    /// Alpha source package layout directory.
+    #[serde(alias = "private_alpha_dir")]
+    pub alpha_package_dir: String,
     /// Whether generated assets/templates may overwrite existing files.
     pub overwrite_existing: bool,
 }
@@ -597,7 +598,7 @@ impl Default for ArtifactsConfig {
             obs_templates_dir: "artifacts/obs-templates".to_string(),
             support_bundles_dir: "artifacts/support-bundles".to_string(),
             field_reports_dir: "artifacts/field-reports".to_string(),
-            private_alpha_dir: "artifacts/private-alpha".to_string(),
+            alpha_package_dir: "artifacts/alpha-source-package".to_string(),
             overwrite_existing: false,
         }
     }
@@ -1035,9 +1036,9 @@ fn validate_artifacts(config: &AppConfig, issues: &mut Vec<ConfigValidationIssue
             "field_reports_dir",
         ),
         (
-            "artifacts.private-alpha-dir-empty",
-            &config.artifacts.private_alpha_dir,
-            "private_alpha_dir",
+            "artifacts.alpha-package-dir-empty",
+            &config.artifacts.alpha_package_dir,
+            "alpha_package_dir",
         ),
     ];
 
