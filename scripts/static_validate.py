@@ -22,6 +22,7 @@ LEGACY_TERMS = [
     joined(['I','M','P','L','E','M','E','N','T','A','T','I','O','N','_','W','A','V','E']),
     joined(['P','R','E','_','C','O','D','E','X','_','W','A','V','E']),
     joined(['p','r','e','_','c','o','d','e','x','_','w','a','v','e','s']),
+    joined(['I','T','E','R','-']),
 ]
 LEGACY_WORD = joined(['w','a','v','e'])
 
