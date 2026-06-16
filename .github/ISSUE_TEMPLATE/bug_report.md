@@ -1,6 +1,7 @@
 ---
 name: Bug report
 about: Report a reproducible OpenIRL source, config, API, dashboard, or packaging issue
+title: "[Bug]: "
 labels: bug
 ---
 

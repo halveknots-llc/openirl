@@ -5,7 +5,7 @@ contact_links:
     about: Report vulnerabilities or sensitive production issues privately.
   - name: Private conduct report
     url: https://github.com/halveknots-llc/openirl/security/advisories/new
-    about: Report private Code of Conduct concerns with the title prefix "Conduct report:".
+    about: Use the private maintainer intake with the title prefix "Conduct report:".
   - name: GitHub abuse report
     url: https://support.github.com/contact/report-abuse
     about: Report platform-level abuse through GitHub's private support flow.

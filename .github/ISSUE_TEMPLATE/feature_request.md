@@ -1,6 +1,7 @@
 ---
 name: Feature request
 about: Propose an operator-facing OpenIRL improvement
+title: "[Feature]: "
 labels: enhancement
 ---
 

@@ -1,6 +1,7 @@
 ---
 name: Field report
 about: Report behavior from OBS, MediaMTX, mobile encoders, relays, tunnels, or brownout recovery
+title: "[Field report]: "
 labels: field-report
 ---
 

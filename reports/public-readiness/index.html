@@ -197,6 +197,10 @@
           <strong>Public</strong>
           <span>GitHub repository visibility verified</span>
         </div>
+        <div class="metric">
+          <strong>Scanning</strong>
+          <span>CodeQL and Dependabot maintenance workflows added</span>
+        </div>
       </div>
     </section>
 
@@ -300,7 +304,7 @@
           <h3>Public-surface cleanup pass completed</h3>
           <ul>
             <li>Changed generated audit evidence so tool availability is recorded without absolute maintainer-machine paths.</li>
-            <li>Changed Code of Conduct reporting so conduct issues do not route through security advisories.</li>
+            <li>Clarified private conduct reporting with a title-prefixed private maintainer intake and separate vulnerability guidance.</li>
             <li>Renamed the visible alpha package feature label to public alpha source package.</li>
             <li>Sanitized this readiness log so it can remain in the public repository as a maintainer evidence trail.</li>
             <li>Remaining publication operations are GitHub repository settings, label creation, visibility switch, and final validation after regenerated media.</li>
@@ -321,6 +325,21 @@
             <li>Protected <code>main</code> with required <code>rust</code> status checks, strict branch currency, linear history, blocked force pushes, blocked deletions, and required conversation resolution.</li>
             <li>Verified GitHub Actions CI passed on the public <code>main</code> branch after updating to <code>actions/checkout@v6</code>.</li>
             <li>Live OBS, MediaMTX, mobile encoder, BELABOX, SRTLA, tunnel, and Windows packaging proof remains explicitly unclaimed until real dependency checks run.</li>
+          </ul>
+          <figure>
+            <img src="assets/public-readiness-clean.png" alt="Sanitized OpenIRL public readiness evidence rendered in a browser">
+            <figcaption>Sanitized media summary for the public-readiness evidence trail.</figcaption>
+          </figure>
+        </article>
+        <article class="entry">
+          <time datetime="2026-06-16T14:26:38-07:00">2026-06-16 14:26:38 PDT</time>
+          <h3>Public maintenance hardening added</h3>
+          <ul>
+            <li>Added CodeQL code scanning for Rust source and GitHub Actions workflow analysis using <code>github/codeql-action@v4</code>.</li>
+            <li>Added weekly Dependabot update checks for Cargo dependencies and GitHub Actions.</li>
+            <li>Added issue-template title prefixes so GitHub's issue chooser presents cleaner contributor intake paths.</li>
+            <li>Removed the internal iteration progress artifact from public docs and taught static validation to reject legacy iteration labels.</li>
+            <li>Rechecked GitHub public visibility, branch protection, private vulnerability reporting, secret scanning, issue templates, labels, LFS status, and local Git object hygiene.</li>
           </ul>
           <figure>
             <img src="assets/public-readiness-clean.png" alt="Sanitized OpenIRL public readiness evidence rendered in a browser">
