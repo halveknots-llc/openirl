@@ -143,9 +143,14 @@ Current status:
 - `python3 scripts/security/security-audit-smoke.py`: passed on 2026-06-16.
 - `cargo xtask ci`: passed on 2026-06-16.
 - Sanitized browser-rendered media captured: `reports/public-readiness/assets/public-readiness-clean.png`.
+- GitHub repository visibility: public on 2026-06-16.
+- Remote `main`: `e39b1000cb22fcb52c582b7c8ad13e4f93efc1c0` before final readiness-log update.
+- GitHub Actions `ci` / `rust`: passed on the public `main` branch after the workflow update to `actions/checkout@v6`.
+- GitHub security setup: private vulnerability reporting, Dependabot security updates, secret scanning, push protection, non-provider pattern scanning, and validity checks enabled.
+- Branch protection: `main` requires the `rust` status check, strict branch currency, linear history, no force pushes, no deletion, and conversation resolution.
 
 ## Next Implementation Targets
 
 1. Add live dependency evidence when OBS, MediaMTX, mobile encoders, BELABOX, SRTLA, tunnels, or Windows packaging hosts are available.
 2. Keep this readiness report public-safe as a maintainer evidence trail.
-3. Complete GitHub repository settings, label creation, private vulnerability reporting verification, visibility switch, and final validation.
+3. Re-run the documented validation gate before each release claim or public alpha package cut.
