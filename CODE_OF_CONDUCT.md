@@ -28,7 +28,7 @@ Examples of unacceptable behavior include:
 
 Project maintainers are responsible for clarifying and enforcing standards of acceptable behavior and may remove, edit, or reject comments, commits, issues, pull requests, or other contributions that are not aligned with this Code of Conduct.
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported through [GitHub private vulnerability reporting](https://github.com/halveknots-llc/openirl/security/advisories/new) when private details are involved. If the private report path is unavailable, open a minimal public issue asking maintainers for a private contact path without including sensitive details. All reports will be reviewed and investigated fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior that require privacy may be reported through the repository's private report form with the title prefix `Conduct report:`. Platform-level abuse may also be reported through GitHub's private abuse-reporting flow. Vulnerabilities and credential exposure should use the security reporting path in `SECURITY.md` instead. All reports will be reviewed and investigated fairly.
 
 ## Attribution
 

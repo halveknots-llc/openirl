@@ -507,7 +507,7 @@ pub fn build_v1_features() -> Vec<V1Feature> {
         ),
         feature_area!(
             "alpha-source-package",
-            "Private alpha package",
+            "Public alpha source package",
             Priority::P0,
             "The alpha source package layout includes binaries, configs, assets, templates, smoke scripts, docs, and limitations.",
             &[

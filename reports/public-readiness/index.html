@@ -178,7 +178,7 @@
         <span class="pill">Goal: public open-source launch</span>
       </div>
       <h1>Public Readiness Log</h1>
-      <p class="subtitle">A durable, timestamped working page for the launch-readiness push. It records evidence, visible artifacts, validation status, and remaining release risks as the repository is polished for a public open-source audience.</p>
+      <p class="subtitle">A durable, timestamped maintainer log for the launch-readiness push. It records evidence, visible artifacts, validation status, and remaining release risks as the repository is polished for a public open-source audience.</p>
     </div>
   </header>
   <main class="wrap">
@@ -194,8 +194,8 @@
           <span>Additional readiness audits completed this pass</span>
         </div>
         <div class="metric">
-          <strong>Private</strong>
-          <span>GitHub remote visibility before publication</span>
+          <strong>Pending</strong>
+          <span>GitHub publication operation in progress</span>
         </div>
       </div>
     </section>
@@ -233,14 +233,14 @@
           <time datetime="2026-06-16T13:10:32-07:00">2026-06-16 13:10:32 PDT</time>
           <h3>Readiness run opened</h3>
           <ul>
-            <li>Confirmed current checkout on the external development volume.</li>
+            <li>Confirmed the maintainer checkout and branch state.</li>
             <li>Confirmed git state started clean on <code>main</code> tracking <code>origin/main</code>.</li>
             <li>Read repo instructions and validation requirements in <code>AGENTS.md</code>.</li>
             <li>Started parallel audits for docs/community, CI/release metadata, and security/local-first safety.</li>
           </ul>
           <figure>
-            <img src="assets/initial-progress-page.png" alt="Initial OpenIRL public readiness log rendered in a browser">
-            <figcaption>Initial rendered progress page captured after the first repository inspection.</figcaption>
+            <img src="assets/public-readiness-clean.png" alt="Sanitized OpenIRL public readiness evidence rendered in a browser">
+            <figcaption>Sanitized media summary for the public-readiness evidence trail.</figcaption>
           </figure>
         </article>
         <article class="entry">
@@ -255,8 +255,8 @@
             <li>Validation passed: <code>python3 scripts/static_validate.py</code> and <code>python3 scripts/audit/handoff_audit.py</code>.</li>
           </ul>
           <figure>
-            <img src="assets/front-door-patch.png" alt="Updated OpenIRL public readiness log after front-door implementation work">
-            <figcaption>Rendered progress page after public-front-door implementation and the first two validation passes.</figcaption>
+            <img src="assets/public-readiness-clean.png" alt="Sanitized OpenIRL public readiness evidence rendered in a browser">
+            <figcaption>Sanitized media summary for the public-readiness evidence trail.</figcaption>
           </figure>
         </article>
         <article class="entry">
@@ -272,8 +272,8 @@
             <li>Validation passed: static validation, handoff audit, format check, Clippy with warnings denied, workspace tests, security smoke, and <code>cargo xtask ci</code>.</li>
           </ul>
           <figure>
-            <img src="assets/security-validation-pass.png" alt="OpenIRL public readiness log after security implementation and validation pass">
-            <figcaption>Rendered progress page after security hardening and full repository validation passed.</figcaption>
+            <img src="assets/public-readiness-clean.png" alt="Sanitized OpenIRL public readiness evidence rendered in a browser">
+            <figcaption>Sanitized media summary for the public-readiness evidence trail.</figcaption>
           </figure>
         </article>
         <article class="entry">
@@ -291,8 +291,23 @@
             <li>Validation passed: static validation, source-readiness audit, security smoke, format check, Clippy with warnings denied, workspace tests, and <code>cargo xtask ci</code>.</li>
           </ul>
           <figure>
-            <img src="assets/public-readiness-hardening.png" alt="OpenIRL public readiness log after docs, validation, and security hardening">
-            <figcaption>Rendered progress page after public-readiness hardening and broad validation passed.</figcaption>
+            <img src="assets/public-readiness-clean.png" alt="Sanitized OpenIRL public readiness evidence rendered in a browser">
+            <figcaption>Sanitized media summary for the public-readiness evidence trail.</figcaption>
+          </figure>
+        </article>
+        <article class="entry">
+          <time datetime="2026-06-16T14:00:11-07:00">2026-06-16 14:00:11 PDT</time>
+          <h3>Public-surface cleanup pass completed</h3>
+          <ul>
+            <li>Changed generated audit evidence so tool availability is recorded without absolute maintainer-machine paths.</li>
+            <li>Changed Code of Conduct reporting so conduct issues do not route through security advisories.</li>
+            <li>Renamed the visible alpha package feature label to public alpha source package.</li>
+            <li>Sanitized this readiness log so it can remain in the public repository as a maintainer evidence trail.</li>
+            <li>Remaining publication operations are GitHub repository settings, label creation, visibility switch, and final validation after regenerated media.</li>
+          </ul>
+          <figure>
+            <img src="assets/public-readiness-clean.png" alt="Sanitized OpenIRL public readiness evidence rendered in a browser">
+            <figcaption>Sanitized media summary for the public-readiness evidence trail.</figcaption>
           </figure>
         </article>
       </div>

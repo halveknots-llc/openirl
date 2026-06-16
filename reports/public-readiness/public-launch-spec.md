@@ -25,7 +25,7 @@ Required outcomes:
 
 Current status:
 
-- Implemented in this run for license texts, root license selector, and Cargo metadata.
+- Implemented for launch preparation: license texts, root license selector, and Cargo metadata.
 
 ### 2. Community Health
 
@@ -40,7 +40,7 @@ Required outcomes:
 
 Current status:
 
-- Implemented in this run for root community files and `.github` templates.
+- Implemented for launch preparation: root community files and `.github` templates.
 
 ### 3. Newcomer Documentation
 
@@ -53,7 +53,7 @@ Required outcomes:
 
 Current status:
 
-- Implemented in this run for README status, docs index, quickstart, and changelog.
+- Implemented for launch preparation: README status, docs index, quickstart, and changelog.
 
 ### 4. Validation and CI
 
@@ -67,7 +67,7 @@ Required outcomes:
 
 Current status:
 
-- Implemented in this run for `xtask ci`, GitHub Actions, validation docs, release checklist, and security smoke coverage.
+- Implemented for launch preparation: `xtask ci`, GitHub Actions, validation docs, release checklist, and security smoke coverage.
 - Static validation and handoff audit passed after AppleDouble sidecar cleanup.
 
 ### 5. Security and Local-First Safety
@@ -82,8 +82,8 @@ Required outcomes:
 
 Current status:
 
-- Policy and docs updates implemented in this run.
-- Code-level safety updates implemented in this run:
+- Policy and docs updates implemented for launch preparation.
+- Code-level safety updates implemented for launch preparation:
   - `--bind` overrides are applied before config validation.
   - error-level config validation findings stop agent startup.
   - `/api/*` routes require non-loopback auth through shared middleware.
@@ -104,7 +104,7 @@ Required outcomes:
 
 Current status:
 
-- Implemented in this run. Root-level internal process files were removed, public maintainer checks were added, validators now require public community surfaces, release artifact names use public alpha wording, and first-tier operator docs now include concrete commands, expected evidence, and validation boundaries.
+- Implemented for launch preparation. Root-level internal process files were removed, public maintainer checks were added, validators now require public community surfaces, release artifact names use public alpha wording, and first-tier operator docs now include concrete commands, expected evidence, and validation boundaries.
 
 ### 7. Live Dependency Evidence
 
@@ -142,13 +142,10 @@ Current status:
 - `cargo test --workspace`: passed on 2026-06-16.
 - `python3 scripts/security/security-audit-smoke.py`: passed on 2026-06-16.
 - `cargo xtask ci`: passed on 2026-06-16.
-- Browser screenshot captured: `reports/public-readiness/assets/initial-progress-page.png`.
-- Browser screenshot captured: `reports/public-readiness/assets/front-door-patch.png`.
-- Browser screenshot captured: `reports/public-readiness/assets/security-validation-pass.png`.
-- Browser screenshot captured: `reports/public-readiness/assets/public-readiness-hardening.png`.
+- Sanitized browser-rendered media captured: `reports/public-readiness/assets/public-readiness-clean.png`.
 
 ## Next Implementation Targets
 
 1. Add live dependency evidence when OBS, MediaMTX, mobile encoders, BELABOX, SRTLA, tunnels, or Windows packaging hosts are available.
-2. Decide whether to publish the readiness report itself or keep it as a local working artifact before the repository visibility switch.
-3. Push the validated source-readiness patch, then switch GitHub visibility only when maintainers are ready to operate the public issue/security surfaces.
+2. Keep this readiness report public-safe as a maintainer evidence trail.
+3. Complete GitHub repository settings, label creation, private vulnerability reporting verification, visibility switch, and final validation.
