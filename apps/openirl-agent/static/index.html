@@ -4,23 +4,51 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>OpenIRL Agent</title>
+    <link rel="icon" href="/assets/openirl-icon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/assets/openirl-icon-192.png" />
     <style>
-      :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, sans-serif;
+        background: #071013;
+        color: #edf7f8;
+      }
       body { margin: 2rem; max-width: 1180px; }
-      code { background: #222; padding: .15rem .35rem; border-radius: .25rem; }
-      button { margin: .2rem .35rem .2rem 0; padding: .55rem .75rem; border-radius: .5rem; border: 1px solid #555; cursor: pointer; }
-      pre { background: #161616; border: 1px solid #333; border-radius: 12px; padding: 1rem; overflow: auto; min-height: 20rem; }
-      .card { border: 1px solid #444; border-radius: 12px; padding: 1rem; margin: 1rem 0; }
+      code { background: #162024; padding: .15rem .35rem; border-radius: .25rem; }
+      button {
+        margin: .2rem .35rem .2rem 0;
+        padding: .55rem .75rem;
+        border-radius: .375rem;
+        border: 1px solid #3f5961;
+        background: #102127;
+        color: #eefafa;
+        cursor: pointer;
+      }
+      button:hover { border-color: #62dce6; background: #12313a; }
+      pre { background: #091417; border: 1px solid #26383d; border-radius: 8px; padding: 1rem; overflow: auto; min-height: 20rem; }
+      .app-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+      .app-icon { width: 4.5rem; height: 4.5rem; border-radius: 1.25rem; box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, .35); }
+      .eyebrow { margin: 0; color: #89aeb6; font-size: .85rem; text-transform: uppercase; }
+      h1 { margin: .1rem 0 .25rem; }
+      .lead { margin: 0; color: #c4d8dd; max-width: 72ch; }
+      .card { border: 1px solid #2f454c; border-radius: 8px; padding: 1rem; margin: 1rem 0; background: #0b181c; }
       .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
-      textarea { width: 100%; min-height: 7rem; background: #111; color: #eee; border: 1px solid #444; border-radius: .5rem; padding: .5rem; }
-      input { width: 100%; box-sizing: border-box; background: #111; color: #eee; border: 1px solid #444; border-radius: .5rem; padding: .5rem; }
+      textarea { width: 100%; min-height: 7rem; background: #081113; color: #eefafa; border: 1px solid #2f454c; border-radius: .5rem; padding: .5rem; }
+      input { width: 100%; box-sizing: border-box; background: #081113; color: #eefafa; border: 1px solid #2f454c; border-radius: .5rem; padding: .5rem; }
     </style>
   </head>
   <body>
-    <h1>OpenIRL Agent</h1>
+    <header class="app-header">
+      <img class="app-icon" src="/assets/openirl-icon-192.png" alt="" />
+      <div>
+        <p class="eyebrow">Local-first IRL control plane</p>
+        <h1>OpenIRL Agent</h1>
+        <p class="lead">Dashboard controls for OBS actions, encoder profiles, relay readiness, brownout decisions, artifacts, and validation evidence.</p>
+      </div>
+    </header>
     <div class="card">
-      <p>Rust-first local agent is running. feature areas adds the full v1/public-beta layer: OBS reconciliation, local ingest, mobile encoder compatibility, dashboard/security hardening, brownout v2, relay/tunnel planning, public beta release gates, WebRTC preview planning, vertical/clip workflows, and plugin API stabilization.</p>
-      <p>Core path: install locally, connect OBS, generate an encoder profile, simulate/ingest metrics, switch fallback scenes, mark clips, and run the alpha and mobile field validation evidence plans.</p>
+      <p>Rust-first local agent is running. The v1/public-beta layer covers OBS reconciliation, local ingest, mobile encoder compatibility, dashboard security, brownout handling, relay and tunnel planning, release gates, WebRTC preview planning, vertical clip workflows, and plugin API stabilization.</p>
+      <p>Core path: install locally, connect OBS, generate an encoder profile, simulate or ingest metrics, switch fallback scenes, mark clips, and run the alpha and mobile field validation evidence plans.</p>
     </div>
 
     <div class="grid">
