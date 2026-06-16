@@ -67,7 +67,7 @@
         <h2>Setup</h2>
         <label for="auth-token">Authorization token</label>
         <input id="auth-token" type="password" autocomplete="current-password" />
-        <button id="save-auth-token">Save Token</button>
+        <button id="use-auth-token">Use Token</button>
         <button id="clear-auth-token">Clear Token</button>
         <button data-get="/api/auth/status">Auth Status</button>
         <button data-get="/api/install/plan">Install Plan</button>
@@ -166,22 +166,22 @@
     <script>
       const output = document.querySelector('#output');
       const tokenInput = document.querySelector('#auth-token');
-      tokenInput.value = localStorage.getItem('openirl.authToken') || '';
-      document.querySelector('#save-auth-token').addEventListener('click', () => {
-        localStorage.setItem('openirl.authToken', tokenInput.value.trim());
-        output.textContent = 'Authorization token saved locally in this browser.';
+      let authToken = '';
+      document.querySelector('#use-auth-token').addEventListener('click', () => {
+        authToken = tokenInput.value.trim();
+        output.textContent = authToken ? 'Authorization token loaded for this page session.' : 'Authorization token is empty.';
       });
       document.querySelector('#clear-auth-token').addEventListener('click', () => {
-        localStorage.removeItem('openirl.authToken');
+        authToken = '';
         tokenInput.value = '';
         output.textContent = 'Authorization token cleared.';
       });
       async function request(method, path, body) {
         output.textContent = `${method} ${path} ...`;
         const options = { method, headers: {} };
-        const authToken = tokenInput.value.trim();
-        if (authToken) {
-          options.headers.authorization = `Bearer ${authToken}`;
+        const requestToken = tokenInput.value.trim() || authToken;
+        if (requestToken) {
+          options.headers.authorization = `Bearer ${requestToken}`;
         }
         if (body !== undefined) {
           options.headers['content-type'] = 'application/json';

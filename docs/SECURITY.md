@@ -7,6 +7,7 @@ For vulnerability reporting, supported versions, and disclosure expectations, us
 ## Defaults
 
 - Bind the agent to `127.0.0.1` unless LAN access is intentionally enabled.
+- Keep dashboard API access same-origin unless explicit CORS origins are configured.
 - Require OBS WebSocket authentication.
 - Keep OBS WebSocket off the public internet.
 - Keep relay execution disabled until configured by the operator.

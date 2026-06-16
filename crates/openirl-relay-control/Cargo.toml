@@ -8,6 +8,7 @@ rust-version.workspace = true
 
 [dependencies]
 openirl-core = { path = "../openirl-core" }
+openirl-vault = { path = "../openirl-vault" }
 serde.workspace = true
 thiserror.workspace = true
 time.workspace = true

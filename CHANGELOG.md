@@ -26,6 +26,7 @@ All notable OpenIRL changes are documented here. OpenIRL follows a pre-1.0 alpha
 ### Validation
 
 - `cargo xtask ci` runs static validation, the source-readiness audit, security smoke, formatting, Clippy with warnings denied, and the workspace test suite.
+- Cargo dependency advisory, license, source, and duplicate-version policy is checked with `cargo deny check`.
 - Live smoke scripts are included for OBS, MediaMTX, mobile profile compatibility, relay, tunnel, WebRTC preview, support bundles, and Windows packaging environments.
 
 ### Known Limitations

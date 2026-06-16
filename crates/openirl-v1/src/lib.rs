@@ -1071,7 +1071,7 @@ fn package_readme() -> String {
 
 fn public_beta_config() -> String {
     s(
-        "[api]\nbind = \"127.0.0.1:7707\"\nallow_lan = false\n\n[obs]\nadapter = \"web-socket\"\nhost = \"127.0.0.1\"\nport = 4455\npassword_env = \"OPENIRL_OBS_PASSWORD\"\ncreate_missing_scenes = true\n\n[metrics]\nenabled = true\nsource = \"media-mtx-prometheus\"\nauto_poll = false\n\n[security]\ndashboard_auth_enabled = false\nrequire_auth_outside_localhost = true\nredact_logs = true\n",
+        "[api]\nbind = \"127.0.0.1:7707\"\nallow_lan = false\ncors_allowed_origins = []\n\n[obs]\nadapter = \"web-socket\"\nhost = \"127.0.0.1\"\nport = 4455\npassword_env = \"OPENIRL_OBS_PASSWORD\"\ncreate_missing_scenes = true\n\n[metrics]\nenabled = true\nsource = \"media-mtx-prometheus\"\nauto_poll = false\n\n[security]\ndashboard_auth_enabled = false\nrequire_auth_outside_localhost = true\nredact_logs = true\n",
     )
 }
 

@@ -123,6 +123,7 @@ fn supervisors_from_config(config: &AppConfig) -> Vec<RelaySupervisor> {
             metrics_url: relay_metrics_url(config, process.kind),
             api_url: relay_api_url(config, process.kind),
             log_tail_limit: 200,
+            redact_logs: config.security.redact_logs,
         }));
     }
 

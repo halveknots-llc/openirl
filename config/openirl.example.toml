@@ -1,6 +1,7 @@
 [api]
 bind = "127.0.0.1:7707"
 allow_lan = false
+cors_allowed_origins = []
 history_limit = 512
 
 [runtime]

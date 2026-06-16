@@ -8,6 +8,7 @@ Use this page when preparing public source changes, alpha packages, or release c
 python3 scripts/static_validate.py
 python3 scripts/audit/handoff_audit.py
 python3 scripts/security/security-audit-smoke.py
+cargo deny check
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace

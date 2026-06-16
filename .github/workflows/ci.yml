@@ -4,12 +4,16 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   rust:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      - name: Install Rust toolchain
+        run: rustup show
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --version 0.19.7 --locked
       - run: cargo xtask ci

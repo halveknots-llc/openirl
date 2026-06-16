@@ -5,6 +5,7 @@
 //! agent safe to iterate while preserving a future path to native adapters.
 
 use openirl_core::{DeploymentMode, Protocol};
+use openirl_vault::redact_support_text;
 use serde::{Deserialize, Serialize};
 use std::{
     env,
@@ -123,6 +124,8 @@ pub struct RelayProcessConfig {
     pub api_url: Option<String>,
     /// Maximum retained log lines.
     pub log_tail_limit: usize,
+    /// Redact captured child-process and supervisor logs.
+    pub redact_logs: bool,
 }
 
 impl RelayProcessConfig {
@@ -143,6 +146,7 @@ impl RelayProcessConfig {
             metrics_url: Some("http://127.0.0.1:9998/metrics".to_string()),
             api_url: Some("http://127.0.0.1:9997".to_string()),
             log_tail_limit: DEFAULT_LOG_LIMIT,
+            redact_logs: true,
         }
     }
 
@@ -418,6 +422,7 @@ impl RelaySupervisor {
                 "stdout",
                 stdout,
                 inner.config.log_tail_limit,
+                inner.config.redact_logs,
             );
         }
 
@@ -427,6 +432,7 @@ impl RelaySupervisor {
                 "stderr",
                 stderr,
                 inner.config.log_tail_limit,
+                inner.config.redact_logs,
             );
         }
 
@@ -435,6 +441,7 @@ impl RelaySupervisor {
             "supervisor",
             format!("started {} as pid {:?}", inner.config.name, pid),
             inner.config.log_tail_limit,
+            inner.config.redact_logs,
         )
         .await;
 
@@ -468,6 +475,7 @@ impl RelaySupervisor {
                 "supervisor",
                 format!("stopped {}: {exit}", config.name),
                 config.log_tail_limit,
+                config.redact_logs,
             )
             .await;
         }
@@ -640,6 +648,7 @@ fn spawn_log_reader<T>(
     stream: &'static str,
     reader: T,
     limit: usize,
+    redact_logs: bool,
 ) where
     T: tokio::io::AsyncRead + Send + Unpin + 'static,
 {
@@ -648,15 +657,16 @@ fn spawn_log_reader<T>(
         loop {
             match lines.next_line().await {
                 Ok(Some(line)) => {
-                    push_log_now(logs.clone(), stream, line, limit).await;
+                    push_log_now(logs.clone(), stream, line, limit, redact_logs).await;
                 }
                 Ok(None) => break,
-                Err(error) => {
+                Err(read_error) => {
                     push_log_now(
                         logs.clone(),
                         stream,
-                        format!("log reader failed: {error}"),
+                        format!("log reader failed: {read_error}"),
                         limit,
+                        redact_logs,
                     )
                     .await;
                     break;
@@ -671,12 +681,18 @@ async fn push_log_now(
     stream: &str,
     line: String,
     limit: usize,
+    redact_logs: bool,
 ) {
+    let line = if redact_logs {
+        redact_support_text(&line, true)
+    } else {
+        line
+    };
     let mut logs = logs.lock().await;
     logs.push(RelayLogLine {
         at: OffsetDateTime::now_utc(),
         stream: stream.to_string(),
-        line: redact_arg(&line),
+        line,
     });
     let limit = limit.max(1);
     if logs.len() > limit {
@@ -718,5 +734,23 @@ mod tests {
             build_credential_plan("example.test", 9000, 9001, "main", "OPENIRL_SRT_PASSPHRASE");
         assert!(plan.srt_url_redacted.contains("passphrase=<redacted>"));
         assert!(plan.srtla_url_redacted.contains("token=<redacted>"));
+    }
+
+    #[tokio::test]
+    async fn captured_logs_use_shared_redaction() {
+        let logs = Arc::new(Mutex::new(Vec::new()));
+        push_log_now(
+            logs.clone(),
+            "stdout",
+            "Authorization: Bearer field-token relay=10.23.45.67".to_string(),
+            10,
+            true,
+        )
+        .await;
+        let captured = logs.lock().await[0].line.clone();
+        assert!(captured.contains("Bearer <redacted>"));
+        assert!(captured.contains("relay=<redacted-ip>"));
+        assert!(!captured.contains("field-token"));
+        assert!(!captured.contains("10.23.45.67"));
     }
 }
