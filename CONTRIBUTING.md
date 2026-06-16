@@ -38,6 +38,10 @@ Live smoke scripts require the named external tool or device. Do not claim OBS, 
 - Add or update focused tests when behavior changes.
 - Include the validation commands you ran and the commands you intentionally did not run.
 
+## Contribution Licensing
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in OpenIRL is licensed as `Apache-2.0 OR MIT`, without any additional terms or conditions.
+
 ## Security-Sensitive Changes
 
 For vulnerabilities or sensitive production issues, follow [SECURITY.md](SECURITY.md) instead of opening a public issue. Public issues should not include stream keys, dashboard tokens, OBS passwords, private relay credentials, or unreviewed support bundles.

@@ -68,7 +68,7 @@ def main() -> int:
                     findings.append((f'{relative}:{idx}','marker',line.strip()[:160]))
                     break
     required = [
-        'README.md','CONTRIBUTING.md','SECURITY.md','SUPPORT.md','LICENSE','Cargo.toml','apps/openirl-agent/src/main.rs',
+        'README.md','CONTRIBUTING.md','SECURITY.md','SUPPORT.md','LICENSE-APACHE','LICENSE-MIT','Cargo.toml','apps/openirl-agent/src/main.rs',
         'crates/openirl-v1/src/lib.rs','docs/ARCHITECTURE.md','docs/SECURITY.md',
         'docs/README.md','docs/VALIDATION.md','docs/MAINTAINER_CHECKS.md',
         'docs/features/obs-reconciliation.md','scripts/audit/handoff_audit.py'

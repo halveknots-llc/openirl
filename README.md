@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://github.com/halveknots-llc/openirl/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/halveknots-llc/openirl/actions/workflows/ci.yml/badge.svg" /></a>
-  <a href="LICENSE"><img alt="License: MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-2f855a" /></a>
+  <a href="#license"><img alt="License: MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-2f855a" /></a>
   <a href="docs/SECURITY.md"><img alt="Local-first security posture" src="https://img.shields.io/badge/security-localhost--first-0f766e" /></a>
   <a href="docs/README.md"><img alt="Documentation" src="https://img.shields.io/badge/docs-operator%20runbooks-2563eb" /></a>
 </p>
@@ -285,4 +285,6 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Keep docs
 
 ## License
 
-OpenIRL is distributed under dual MIT and Apache-2.0 licensing. See [LICENSE](LICENSE), [LICENSE-MIT](LICENSE-MIT), and [LICENSE-APACHE](LICENSE-APACHE).
+OpenIRL is distributed under `Apache-2.0 OR MIT`, at your option. See [LICENSE-APACHE](LICENSE-APACHE) and [LICENSE-MIT](LICENSE-MIT) for the canonical license texts.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in OpenIRL is licensed as `Apache-2.0 OR MIT`, without any additional terms or conditions.
