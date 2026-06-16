@@ -17,7 +17,7 @@ struct Cli {
 enum Task {
     /// Run local CI commands.
     Ci,
-    /// Print handoff checks.
+    /// Print maintainer checks.
     Handoff,
 }
 
@@ -26,10 +26,10 @@ fn main() -> Result<()> {
     match cli.command {
         Task::Ci => ci(),
         Task::Handoff => {
-            println!("OpenIRL Rust Kit handoff checklist:");
-            println!("- Initial handoff feature areas: 8");
+            println!("OpenIRL maintainer checklist:");
+            println!("- Initial feature areas: 8");
             println!("- Current schema revision: 38");
-            println!("- Read docs/CODEX_HANDOFF.md");
+            println!("- Read docs/MAINTAINER_CHECKS.md");
             println!("- Run python3 scripts/static_validate.py before cargo checks");
             println!(
                 "- Validate feature areas OBS reconciliation, local ingest, mobile profiles, dashboard, security, brownout, relay, NAT, public beta packaging, WebRTC preview, vertical clips, and plugin API before v1 release"
@@ -40,26 +40,23 @@ fn main() -> Result<()> {
 }
 
 fn ci() -> Result<()> {
-    run_optional("python3", &["scripts/static_validate.py"])?;
+    run("python3", &["scripts/static_validate.py"])?;
+    run("python3", &["scripts/audit/handoff_audit.py"])?;
+    run("python3", &["scripts/security/security-audit-smoke.py"])?;
     run("cargo", &["fmt", "--all", "--", "--check"])?;
-    run("cargo", &["clippy", "--workspace", "--all-targets"])?;
+    run(
+        "cargo",
+        &[
+            "clippy",
+            "--workspace",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings",
+        ],
+    )?;
     run("cargo", &["test", "--workspace"])?;
     Ok(())
-}
-
-fn run_optional(program: &str, args: &[&str]) -> Result<()> {
-    match Command::new(program).args(args).status() {
-        Ok(status) if status.success() => Ok(()),
-        Ok(status) => bail!("command failed: {program} {} with {status}", args.join(" ")),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            println!(
-                "optional command unavailable: {program}; skipping {}",
-                args.join(" ")
-            );
-            Ok(())
-        }
-        Err(error) => Err(error).with_context(|| format!("failed to start {program}")),
-    }
 }
 
 fn run(program: &str, args: &[&str]) -> Result<()> {

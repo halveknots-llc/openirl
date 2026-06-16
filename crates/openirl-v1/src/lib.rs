@@ -28,7 +28,7 @@ pub enum V1Error {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Priority {
-    /// Required before serious private-alpha users.
+    /// Required before serious alpha users.
     P0,
     /// Required before public beta.
     P1,
@@ -76,8 +76,9 @@ pub struct V1ImplementationSummary {
     pub schema_revision: u16,
     /// Number of feature areas represented.
     pub feature_count: usize,
-    /// Private-alpha feature cutline.
-    pub private_alpha_cutline: Vec<String>,
+    /// Alpha source feature cutline.
+    #[serde(alias = "private_alpha_cutline")]
+    pub alpha_source_cutline: Vec<String>,
     /// Public-beta feature cutline.
     pub public_beta_cutline: Vec<String>,
     /// V1 feature cutline.
@@ -157,8 +158,9 @@ pub struct V1EvidenceInput {
     pub self_hosted_relay_passed: bool,
     /// NAT/tunnel integration passed.
     pub nat_tunnel_passed: bool,
-    /// Private alpha package passed.
-    pub private_alpha_package_passed: bool,
+    /// Alpha source package passed.
+    #[serde(alias = "private_alpha_package_passed")]
+    pub alpha_source_package_passed: bool,
     /// Public documentation/hardware guides passed.
     pub docs_guides_passed: bool,
     /// Public beta security review passed.
@@ -187,8 +189,9 @@ pub struct ReadinessGate {
 /// Public-beta readiness report.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct V1ReadinessReport {
-    /// Private alpha readiness.
-    pub private_alpha_ready: bool,
+    /// Alpha source readiness.
+    #[serde(alias = "private_alpha_ready")]
+    pub alpha_source_ready: bool,
     /// Public beta readiness.
     pub public_beta_ready: bool,
     /// V1 readiness.
@@ -503,10 +506,10 @@ pub fn build_v1_features() -> Vec<V1Feature> {
             "A user behind CGNAT has a documented path that does not expose OBS WebSocket publicly.",
         ),
         feature_area!(
-            "private-alpha-package",
+            "alpha-source-package",
             "Private alpha package",
             Priority::P0,
-            "The private-alpha package layout includes binaries, configs, assets, templates, smoke scripts, docs, and limitations.",
+            "The alpha source package layout includes binaries, configs, assets, templates, smoke scripts, docs, and limitations.",
             &[
                 "portable layout",
                 "first-run inputs",
@@ -519,8 +522,8 @@ pub fn build_v1_features() -> Vec<V1Feature> {
                 "POST /api/v1/package-layout/materialize",
             ],
             &[
-                "artifacts/private-alpha",
-                "docs/features/private-alpha-package.md",
+                "artifacts/alpha-source-package",
+                "docs/features/alpha-source-package.md",
             ],
             "A tester receives one folder with all alpha docs, presets, assets, and smoke scripts.",
         ),
@@ -576,7 +579,7 @@ pub fn build_v1_features() -> Vec<V1Feature> {
                 "scripts/public-beta/package-public-beta.*",
             ],
             &[
-                "dist/manifest/openirl-release-manifest.handoff.json",
+                "dist/manifest/openirl-release-manifest.json",
                 "docs/RELEASE_CHECKLIST.md",
             ],
             "A public user can install, test, file issues, and recover without maintainer hand-holding.",
@@ -655,7 +658,7 @@ pub fn build_v1_implementation_summary() -> V1ImplementationSummary {
     V1ImplementationSummary {
         schema_revision: 38,
         feature_count: build_v1_features().len(),
-        private_alpha_cutline: keys(&[
+        alpha_source_cutline: keys(&[
             "obs-reconciliation",
             "local-ingest",
             "encoder-profiles",
@@ -663,7 +666,7 @@ pub fn build_v1_implementation_summary() -> V1ImplementationSummary {
             "security",
             "brownout",
             "support-bundles",
-            "private-alpha-package",
+            "alpha-source-package",
         ]),
         public_beta_cutline: keys(&[
             "obs-output",
@@ -794,12 +797,16 @@ pub fn default_v1_package_layout(root: impl Into<String>) -> V1PackageLayout {
                 plugin_schema(),
             ),
             file(
-                "scripts/smoke/e2e-private-alpha.sh",
-                shell_script("echo OpenIRL private alpha smoke ready"),
+                "scripts/smoke/e2e-alpha-source.sh",
+                shell_script(
+                    "echo 'Set OPENIRL_LIVE_ALPHA_SMOKE=1 after OBS, ingest, and encoder dependencies are running.' >&2\nif [[ \"${OPENIRL_LIVE_ALPHA_SMOKE:-}\" != \"1\" ]]; then exit 2; fi\necho 'OpenIRL alpha live smoke acknowledged operator-provided dependencies'",
+                ),
             ),
             file(
-                "scripts/smoke/e2e-private-alpha.ps1",
-                powershell_script("Write-Host 'OpenIRL private alpha smoke ready'"),
+                "scripts/smoke/e2e-alpha-source.ps1",
+                powershell_script(
+                    "if ($env:OPENIRL_LIVE_ALPHA_SMOKE -ne '1') { Write-Error 'Set OPENIRL_LIVE_ALPHA_SMOKE=1 after OBS, ingest, and encoder dependencies are running.' }\nWrite-Host 'OpenIRL alpha live smoke acknowledged operator-provided dependencies'",
+                ),
             ),
             file(
                 "scripts/security/security-audit-smoke.py",
@@ -951,9 +958,9 @@ pub fn evaluate_v1_evidence(evidence: &V1EvidenceInput) -> V1ReadinessReport {
             "validate a no-public-IP path with VPN or reverse tunnel",
         ),
         gate(
-            "private alpha package",
-            evidence.private_alpha_package_passed,
-            "materialize and run the private alpha package",
+            "alpha source package",
+            evidence.alpha_source_package_passed,
+            "materialize and run the alpha source package",
         ),
         gate(
             "docs and guides",
@@ -987,7 +994,7 @@ pub fn evaluate_v1_evidence(evidence: &V1EvidenceInput) -> V1ReadinessReport {
         ),
     ];
 
-    let private_alpha_ready = evidence.static_validation_passed
+    let alpha_source_ready = evidence.static_validation_passed
         && evidence.rust_ci_passed
         && evidence.obs_reconciliation_passed
         && evidence.local_ingest_passed
@@ -996,9 +1003,9 @@ pub fn evaluate_v1_evidence(evidence: &V1EvidenceInput) -> V1ReadinessReport {
         && evidence.local_security_passed
         && evidence.brownout_engine_passed
         && evidence.support_bundle_passed
-        && evidence.private_alpha_package_passed;
+        && evidence.alpha_source_package_passed;
 
-    let public_beta_ready = private_alpha_ready
+    let public_beta_ready = alpha_source_ready
         && evidence.obs_output_health_passed
         && evidence.backup_ingest_passed
         && evidence.alerts_mod_ops_passed
@@ -1021,7 +1028,7 @@ pub fn evaluate_v1_evidence(evidence: &V1EvidenceInput) -> V1ReadinessReport {
         .collect();
 
     V1ReadinessReport {
-        private_alpha_ready,
+        alpha_source_ready,
         public_beta_ready,
         v1_ready,
         gates,
@@ -1172,7 +1179,9 @@ fn powershell_script(command: &str) -> String {
     format!("$ErrorActionPreference = 'Stop'\n{command}\n")
 }
 fn python_security_smoke() -> String {
-    s("#!/usr/bin/env python3\nimport json\nprint(json.dumps({'security_smoke':'ready'}))\n")
+    s(
+        "#!/usr/bin/env python3\nimport sys\nprint('Run the repository security smoke against the source tree before treating this package as security-validated.', file=sys.stderr)\nsys.exit(2)\n",
+    )
 }
 fn python_plugin_validator() -> String {
     s(

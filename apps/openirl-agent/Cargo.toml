@@ -35,6 +35,7 @@ openirl-relay-control = { path = "../../crates/openirl-relay-control" }
 openirl-session = { path = "../../crates/openirl-session" }
 openirl-v1 = { path = "../../crates/openirl-v1" }
 openirl-scene-templates = { path = "../../crates/openirl-scene-templates" }
+regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 time.workspace = true

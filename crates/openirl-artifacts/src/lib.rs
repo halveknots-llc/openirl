@@ -145,9 +145,9 @@ pub struct SupportBundleExport {
     pub generated_at: OffsetDateTime,
 }
 
-/// Private alpha package layout plan.
+/// Alpha source package layout plan.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct PrivateAlphaPackageLayout {
+pub struct AlphaSourcePackageLayout {
     /// Package root directory.
     pub root_dir: String,
     /// Required directories.
@@ -158,7 +158,7 @@ pub struct PrivateAlphaPackageLayout {
     pub instructions: Vec<String>,
 }
 
-/// Private alpha package sample file.
+/// Alpha source package sample file.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AlphaPackageFile {
     /// Relative file path.
@@ -430,9 +430,9 @@ pub fn export_field_report_markdown(
     })
 }
 
-/// Builds a private alpha package layout plan.
+/// Builds an alpha source package layout plan.
 #[must_use]
-pub fn private_alpha_package_layout(root_dir: impl Into<String>) -> PrivateAlphaPackageLayout {
+pub fn alpha_source_package_layout(root_dir: impl Into<String>) -> AlphaSourcePackageLayout {
     let root_dir = root_dir.into();
     let directories = vec![
         "bin".to_string(),
@@ -446,8 +446,8 @@ pub fn private_alpha_package_layout(root_dir: impl Into<String>) -> PrivateAlpha
     let files = vec![
         AlphaPackageFile {
             relative_path: "README.alpha.md".to_string(),
-            purpose: "private alpha operator entrypoint".to_string(),
-            content: "# OpenIRL Private Alpha\n\nRun `openirl-agent serve --config config/openirl.example.toml`, open the local dashboard, materialize fallback assets, then run the OBS/mobile field smoke tests.\n".to_string(),
+            purpose: "alpha source package operator entrypoint".to_string(),
+            content: "# OpenIRL Alpha Source Package\n\nRun `openirl-agent serve --config config/openirl.example.toml`, open the local dashboard, materialize fallback assets, then run the OBS/mobile field smoke tests.\n".to_string(),
         },
         AlphaPackageFile {
             relative_path: "field-reports/README.md".to_string(),
@@ -460,7 +460,7 @@ pub fn private_alpha_package_layout(root_dir: impl Into<String>) -> PrivateAlpha
             content: "# Support Bundles\n\nOpenIRL disk exports should be redacted before sharing. Do not paste stream keys or private location notes.\n".to_string(),
         },
     ];
-    PrivateAlphaPackageLayout {
+    AlphaSourcePackageLayout {
         root_dir,
         directories,
         files,
@@ -472,9 +472,9 @@ pub fn private_alpha_package_layout(root_dir: impl Into<String>) -> PrivateAlpha
     }
 }
 
-/// Materializes a private alpha package layout.
-pub fn materialize_private_alpha_layout(
-    layout: &PrivateAlphaPackageLayout,
+/// Materializes an alpha source package layout.
+pub fn materialize_alpha_source_layout(
+    layout: &AlphaSourcePackageLayout,
 ) -> Result<ArtifactMaterialization, ArtifactError> {
     let root = PathBuf::from(&layout.root_dir);
     fs::create_dir_all(&root)?;
@@ -499,7 +499,7 @@ pub fn materialize_private_alpha_layout(
     files.push(write_json_artifact(
         root.join("openirl-alpha-layout.manifest.json"),
         &manifest,
-        "private alpha package layout manifest",
+        "alpha source package layout manifest",
     )?);
     Ok(ArtifactMaterialization {
         root_dir: path_to_string(&root),

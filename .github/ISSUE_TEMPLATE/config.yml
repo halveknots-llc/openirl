@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/halveknots-llc/openirl/security/advisories/new
+    about: Report vulnerabilities or sensitive production issues privately.
+  - name: Support guidance
+    url: https://github.com/halveknots-llc/openirl/blob/main/SUPPORT.md
+    about: Read where to ask and what evidence to include.

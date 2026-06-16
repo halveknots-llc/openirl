@@ -5,16 +5,21 @@
 ```bash
 python3 scripts/static_validate.py
 python3 scripts/audit/handoff_audit.py
+python3 scripts/security/security-audit-smoke.py
 ```
 
 ## Rust checks
 
 ```bash
-cargo xtask ci
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets
+cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo xtask ci
 ```
+
+`cargo xtask ci` runs static validation, handoff audit, security smoke, formatting, Clippy with warnings denied, and the workspace test suite.
+
+The handoff audit is the historical script name for the source-readiness audit. It verifies that public docs, feature inventory, package evidence, and readiness claims stay aligned.
 
 ## Runtime checks
 

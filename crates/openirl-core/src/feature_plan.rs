@@ -1,8 +1,8 @@
-//! Handoff feature plan for OpenIRL.
+//! Public source feature plan for OpenIRL.
 
 use serde::Serialize;
 
-/// Feature area represented in the handoff package.
+/// Feature area represented in the alpha source package.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub struct FeatureArea {
     /// Stable feature key used by APIs and docs.
@@ -15,12 +15,12 @@ pub struct FeatureArea {
     pub evidence: &'static [&'static str],
 }
 
-/// Number of pre-handoff feature areas captured in the initial planning contract.
-pub const HANDOFF_PHASE_COUNT: u8 = 8;
+/// Number of public source feature areas captured in the initial planning contract.
+pub const INITIAL_FEATURE_AREA_COUNT: u8 = 8;
 
 /// Returns the initial feature plan without numbered development labels.
 #[must_use]
-pub fn handoff_phases() -> Vec<FeatureArea> {
+pub fn feature_areas() -> Vec<FeatureArea> {
     vec![
         FeatureArea {
             key: "product-contract",
@@ -86,21 +86,39 @@ pub fn handoff_phases() -> Vec<FeatureArea> {
             ],
         },
         FeatureArea {
-            key: "handoff-readiness",
-            name: "Handoff readiness",
+            key: "source-readiness",
+            name: "Source readiness",
             goal: "Provide a clean, feature-oriented package for further implementation and live validation.",
             evidence: &[
-                "Feature docs, validation scripts, source package layout, presets, and handoff tasks are included.",
+                "Feature docs, validation scripts, source package layout, presets, and maintainer tasks are included.",
                 "Repository audit checks for missing docs, legacy pass labels, sample markers, and parse failures.",
             ],
         },
     ]
 }
 
-/// Returns true when all initial handoff feature areas are represented.
+/// Returns true when all initial public source feature areas are represented.
+#[must_use]
+pub fn feature_contract_complete() -> bool {
+    feature_areas().len() == usize::from(INITIAL_FEATURE_AREA_COUNT)
+}
+
+/// Compatibility alias for older callers.
+#[deprecated(note = "use INITIAL_FEATURE_AREA_COUNT")]
+pub const HANDOFF_PHASE_COUNT: u8 = INITIAL_FEATURE_AREA_COUNT;
+
+/// Compatibility wrapper for older callers.
+#[deprecated(note = "use feature_areas")]
+#[must_use]
+pub fn handoff_phases() -> Vec<FeatureArea> {
+    feature_areas()
+}
+
+/// Compatibility wrapper for older callers.
+#[deprecated(note = "use feature_contract_complete")]
 #[must_use]
 pub fn handoff_contract_complete() -> bool {
-    handoff_phases().len() == usize::from(HANDOFF_PHASE_COUNT)
+    feature_contract_complete()
 }
 
 #[cfg(test)]
@@ -108,7 +126,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn handoff_contract_has_expected_count() {
-        assert_eq!(handoff_phases().len(), usize::from(HANDOFF_PHASE_COUNT));
+    fn feature_contract_has_expected_count() {
+        assert_eq!(
+            feature_areas().len(),
+            usize::from(INITIAL_FEATURE_AREA_COUNT)
+        );
     }
 }

@@ -94,21 +94,17 @@ pub fn build_release_manifest(
     ReleaseManifest {
         version: version.into(),
         schema_revision,
-        tier: "public-beta-source".to_string(),
+        tier: "public-alpha-source".to_string(),
         artifacts: vec![
-            artifact(
-                ArtifactKind::SourceZip,
-                "openirl-rust-kit-handoff.zip",
-                true,
-            ),
+            artifact(ArtifactKind::SourceZip, "openirl-source-alpha.zip", true),
             artifact(
                 ArtifactKind::Manifest,
-                "dist/manifest/openirl-release-manifest.handoff.json",
+                "dist/manifest/openirl-release-manifest.json",
                 true,
             ),
             artifact(
                 ArtifactKind::Checksum,
-                "openirl-rust-kit-handoff.zip.sha256",
+                "openirl-source-alpha.zip.sha256",
                 true,
             ),
             artifact(
@@ -149,38 +145,38 @@ pub fn release_gates(
         ),
         gate(
             "static-validation",
-            "Static repository validation passes",
-            true,
+            "Static repository validation result supplied",
+            false,
             "python3 scripts/static_validate.py",
         ),
         gate(
             "obs-validation",
-            "OBS automation smoke test documented",
-            true,
+            "OBS automation smoke test result supplied",
+            false,
             "scripts/obs/reconcile-smoke.sh or .ps1",
         ),
         gate(
             "field-evidence",
-            "Mobile field evidence path documented",
-            true,
+            "Mobile field evidence result supplied",
+            false,
             "scripts/field/mobile-field-evidence.sh or .ps1",
         ),
         gate(
             "artifact-materialization",
-            "Fallback assets and OBS templates materialize",
-            true,
+            "Fallback assets and OBS templates materialization result supplied",
+            false,
             "openirl-agent artifacts materialize-fallback and artifacts obs-template --materialize",
         ),
         gate(
             "support-bundle",
-            "Disk support-bundle export path exists",
-            true,
+            "Support-bundle export result supplied",
+            false,
             "POST /api/session/support-bundle/export",
         ),
         gate(
             "security-review",
-            "Security smoke script exists",
-            true,
+            "Security review result supplied",
+            false,
             "python3 scripts/security/security-audit-smoke.py",
         ),
     ]
@@ -235,14 +231,30 @@ fn smoke(name: &str, command: &str, requires_external_runtime: bool) -> SmokeTes
 }
 fn compatibility_matrix() -> Vec<CompatibilityEntry> {
     vec![
-        compat("OBS Studio", "supported", "OBS 28+ built-in WebSocket path"),
-        compat("MediaMTX", "supported", "local router and metrics path"),
-        compat("Moblin", "supported", "SRT/SRTLA profile generation"),
-        compat("IRL Pro", "supported", "SRT/SRTLA profile generation"),
+        compat(
+            "OBS Studio",
+            "requires-live-validation",
+            "OBS 28+ WebSocket path is modeled; run the OBS smoke against a real profile",
+        ),
+        compat(
+            "MediaMTX",
+            "requires-live-validation",
+            "local router and metrics paths are modeled; run ingest smoke against a real process",
+        ),
+        compat(
+            "Moblin",
+            "requires-live-validation",
+            "SRT/SRTLA profile generation is present; validate import on a real iOS device",
+        ),
+        compat(
+            "IRL Pro",
+            "requires-live-validation",
+            "SRT/SRTLA profile generation is present; validate import on a real Android device",
+        ),
         compat(
             "BELABOX",
-            "supported",
-            "SRTLA and backpack workflow presets",
+            "requires-live-validation",
+            "SRTLA and backpack presets are present; validate against real BELABOX tooling",
         ),
     ]
 }

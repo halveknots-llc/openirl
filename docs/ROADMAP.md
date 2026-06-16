@@ -1,6 +1,6 @@
 # Product Roadmap
 
-## Private alpha cutline
+## Public source alpha package
 
 - OBS scene/source reconciliation
 - Local SRT/RTMP ingest through MediaMTX
@@ -9,7 +9,7 @@
 - Local auth and LAN exposure guardrails
 - Brownout scene switching and support bundles
 
-## Public beta cutline
+## Public beta package
 
 - OBS output health classification
 - Backup ingest and failover
@@ -18,7 +18,7 @@
 - NAT/tunnel guidance
 - Hardware guides, troubleshooting docs, security review, release packaging
 
-## V1 cutline
+## V1 package
 
 - SRTLA bonding compatibility
 - WebRTC/WHEP producer preview
