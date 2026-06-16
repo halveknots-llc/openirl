@@ -3,6 +3,12 @@ contact_links:
   - name: Security report
     url: https://github.com/halveknots-llc/openirl/security/advisories/new
     about: Report vulnerabilities or sensitive production issues privately.
+  - name: Private conduct report
+    url: https://github.com/halveknots-llc/openirl/security/advisories/new
+    about: Report private Code of Conduct concerns with the title prefix "Conduct report:".
+  - name: GitHub abuse report
+    url: https://support.github.com/contact/report-abuse
+    about: Report platform-level abuse through GitHub's private support flow.
   - name: Support guidance
     url: https://github.com/halveknots-llc/openirl/blob/main/SUPPORT.md
     about: Read where to ask and what evidence to include.

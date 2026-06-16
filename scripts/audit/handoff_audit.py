@@ -81,11 +81,12 @@ def main() -> int:
     for item in required_docs:
         if not (ROOT/item).exists():
             findings.append({'path':item,'category':'inventory','message':'required source-readiness doc missing'})
-    report={'status':'pass' if not findings else 'fail','findings':findings,'tooling':{tool:shutil.which(tool) for tool in ['cargo','rustc','rustfmt']}}
+    tooling={tool:{'command':tool,'available':shutil.which(tool) is not None} for tool in ['cargo','rustc','rustfmt']}
+    report={'status':'pass' if not findings else 'fail','findings':findings,'tooling':tooling}
     out_json=ROOT/'audit/handoff-audit.json'
     out_md=ROOT/'audit/HANDOFF_AUDIT.md'
     out_json.parent.mkdir(parents=True, exist_ok=True)
-    out_json.write_text(json.dumps(report, indent=2, sort_keys=True), encoding='utf-8')
+    out_json.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n', encoding='utf-8')
     out_md.write_text('# OpenIRL Source Readiness Audit\n\n**Status:** '+report['status'].upper()+'\n\nFindings: '+str(len(findings))+'\n', encoding='utf-8')
     print('handoff audit:', report['status'])
     if findings:

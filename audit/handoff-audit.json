@@ -2,8 +2,17 @@
   "findings": [],
   "status": "pass",
   "tooling": {
-    "cargo": "cargo",
-    "rustc": "rustc",
-    "rustfmt": "rustfmt"
+    "cargo": {
+      "available": true,
+      "command": "cargo"
+    },
+    "rustc": {
+      "available": true,
+      "command": "rustc"
+    },
+    "rustfmt": {
+      "available": true,
+      "command": "rustfmt"
+    }
   }
 }
