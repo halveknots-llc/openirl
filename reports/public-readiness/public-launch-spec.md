@@ -65,7 +65,7 @@ Required outcomes:
 - Security smoke is part of the broad gate.
 - Handoff audit remains part of public-readiness validation until the repository no longer depends on it.
 - Code scanning runs on public pushes, pull requests, weekly schedule, and manual dispatch.
-- Dependency update checks run weekly for Cargo and GitHub Actions.
+- Dependency update checks run weekly for Cargo and GitHub Actions; `regex` is temporarily ignored after a Dependabot updater-side unknown error on the first public run.
 
 Current status:
 
@@ -149,7 +149,7 @@ Current status:
 - Remote `main`: `e39b1000cb22fcb52c582b7c8ad13e4f93efc1c0` before final readiness-log update.
 - GitHub Actions `ci` / `rust`: passed on the public `main` branch after the workflow update to `actions/checkout@v6`.
 - CodeQL workflow added for Rust and GitHub Actions analysis with `github/codeql-action@v4`; first public analysis runs after this hardening push.
-- Dependabot update configuration added for Cargo and GitHub Actions.
+- Dependabot update configuration added for Cargo and GitHub Actions; `regex` is temporarily ignored until Dependabot can evaluate it cleanly.
 - GitHub security setup: private vulnerability reporting, Dependabot security updates, secret scanning, push protection, non-provider pattern scanning, and validity checks enabled.
 - Branch protection: `main` requires the `rust` status check, strict branch currency, linear history, no force pushes, no deletion, and conversation resolution.
 

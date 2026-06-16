@@ -336,7 +336,7 @@
           <h3>Public maintenance hardening added</h3>
           <ul>
             <li>Added CodeQL code scanning for Rust source and GitHub Actions workflow analysis using <code>github/codeql-action@v4</code>.</li>
-            <li>Added weekly Dependabot update checks for Cargo dependencies and GitHub Actions.</li>
+            <li>Added weekly Dependabot update checks for Cargo dependencies and GitHub Actions, with a temporary <code>regex</code> ignore after Dependabot reported an updater-side unknown error.</li>
             <li>Added issue-template title prefixes so GitHub's issue chooser presents cleaner contributor intake paths.</li>
             <li>Removed the internal iteration progress artifact from public docs and taught static validation to reject legacy iteration labels.</li>
             <li>Rechecked GitHub public visibility, branch protection, private vulnerability reporting, secret scanning, issue templates, labels, LFS status, and local Git object hygiene.</li>

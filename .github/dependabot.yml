@@ -8,6 +8,11 @@ updates:
       time: "09:00"
       timezone: America/Los_Angeles
     open-pull-requests-limit: 5
+    ignore:
+      # The first public Cargo update run hit a Dependabot updater
+      # unknown_error for regex on 2026-06-16. Revisit after the
+      # updater can evaluate the package cleanly.
+      - dependency-name: regex
 
   - package-ecosystem: github-actions
     directory: /
