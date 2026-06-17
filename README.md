@@ -86,6 +86,7 @@ The source package also includes live smoke scripts for OBS, MediaMTX, relay, mo
 python3 scripts/static_validate.py
 python3 scripts/audit/handoff_audit.py
 python3 scripts/security/security-audit-smoke.py
+cargo deny check
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
@@ -140,7 +141,7 @@ OpenIRL separates source-level validation from live dependency validation.
 | Validation level | What it proves | Representative commands |
 | --- | --- | --- |
 | Static repository validation | Required files exist, text markers are clean, JSON/TOML parses, and handoff docs stay aligned. | `python3 scripts/static_validate.py`, `python3 scripts/audit/handoff_audit.py` |
-| Rust workspace validation | Formatting, Clippy, tests, and workspace gates pass on the local codebase. | `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `cargo xtask ci` |
+| Rust workspace validation | Dependency policy, formatting, Clippy, tests, and workspace gates pass on the local codebase. | `cargo deny check`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `cargo xtask ci` |
 | API/dashboard validation | The local agent serves expected endpoints and dashboard routes. | `cargo run --package openirl-agent -- serve --config config/openirl.example.toml`, `python3 scripts/smoke/api_smoke.py` |
 | Live dependency validation | OBS, MediaMTX, encoders, relay hosts, SRTLA tooling, tunnels, WebRTC preview, or Windows packaging work in a real environment. | Run the matching script from [Live Smoke Scripts](#live-smoke-scripts). |
 
@@ -249,6 +250,7 @@ Runbooks:
 OpenIRL controls production software, so the default posture is conservative:
 
 - The agent binds to localhost unless LAN access is intentionally enabled.
+- CORS is same-origin by default; cross-origin dashboard clients must be listed explicitly.
 - OBS WebSocket should always be password-protected.
 - Public bind without auth is rejected by config validation.
 - Dashboard tokens, stream keys, SRT passphrases, OBS passwords, and relay credentials are redacted from reports and support artifacts.
@@ -259,6 +261,7 @@ Start with [config/openirl.example.toml](config/openirl.example.toml). Important
 
 ```toml
 api.bind = "127.0.0.1:7707"
+api.cors_allowed_origins = []
 security.require_auth_outside_localhost = true
 security.dashboard_token_env = "OPENIRL_DASHBOARD_TOKEN"
 obs.password_env = "OPENIRL_OBS_PASSWORD"

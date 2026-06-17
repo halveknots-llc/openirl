@@ -361,7 +361,7 @@ pub fn default_obs_source_templates(
             templates.push(browser_source(
                 role,
                 scene_name,
-                format!("OpenIRL {} Asset", role),
+                format!("OpenIRL {role} Asset"),
                 asset_file_uri(&request.asset_root_dir, role_asset_file(role)),
                 format!("Local fallback visual for {role} state."),
             ));

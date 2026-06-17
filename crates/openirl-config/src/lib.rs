@@ -208,6 +208,8 @@ pub struct ApiConfig {
     pub bind: SocketAddr,
     /// Allow LAN access.
     pub allow_lan: bool,
+    /// Explicit cross-origin dashboard/API origins allowed by CORS.
+    pub cors_allowed_origins: Vec<String>,
     /// In-memory samples/events retained for the dashboard.
     pub history_limit: usize,
 }
@@ -217,6 +219,7 @@ impl Default for ApiConfig {
         Self {
             bind: SocketAddr::from(([127, 0, 0, 1], 7707)),
             allow_lan: false,
+            cors_allowed_origins: Vec::new(),
             history_limit: DEFAULT_HISTORY_LIMIT,
         }
     }
@@ -718,6 +721,7 @@ pub fn validate_config(config: &AppConfig) -> ConfigValidationReport {
         ));
     }
 
+    validate_cors(config, &mut issues);
     validate_obs(config, &mut issues);
     validate_ingest(config, &mut issues);
     validate_relay(config, &mut issues);
@@ -734,6 +738,57 @@ pub fn validate_config(config: &AppConfig) -> ConfigValidationReport {
     }
 
     ConfigValidationReport::from_issues(issues)
+}
+
+fn validate_cors(config: &AppConfig, issues: &mut Vec<ConfigValidationIssue>) {
+    for origin in &config.api.cors_allowed_origins {
+        let trimmed = origin.trim();
+        if trimmed.is_empty() {
+            issues.push(issue(
+                "api.cors-origin-empty",
+                ValidationSeverity::Error,
+                "CORS allowed origin is empty.",
+                "Remove the empty origin or set an explicit http:// or https:// origin.",
+            ));
+            continue;
+        }
+
+        if trimmed == "*" || trimmed.contains('*') {
+            issues.push(issue(
+                "api.cors-origin-wildcard",
+                ValidationSeverity::Error,
+                "Wildcard CORS origins are not allowed.",
+                "List each trusted dashboard origin explicitly instead of using a wildcard.",
+            ));
+        }
+
+        if !(trimmed.starts_with("http://") || trimmed.starts_with("https://")) {
+            issues.push(issue(
+                "api.cors-origin-scheme",
+                ValidationSeverity::Error,
+                "CORS allowed origin must use http:// or https://.",
+                "Use a full browser origin such as http://127.0.0.1:7707.",
+            ));
+        }
+
+        if trimmed.chars().any(char::is_whitespace) {
+            issues.push(issue(
+                "api.cors-origin-whitespace",
+                ValidationSeverity::Error,
+                "CORS allowed origin contains whitespace.",
+                "Use one exact browser origin per list entry.",
+            ));
+        }
+    }
+
+    if !config.api.allow_lan && !config.api.cors_allowed_origins.is_empty() {
+        issues.push(issue(
+            "api.cors-origins-without-lan",
+            ValidationSeverity::Warning,
+            "CORS origins are configured while LAN access is disabled.",
+            "Keep cors_allowed_origins empty for same-origin localhost use, or enable LAN access intentionally with dashboard auth.",
+        ));
+    }
 }
 
 fn validate_obs(config: &AppConfig, issues: &mut Vec<ConfigValidationIssue>) {
@@ -1186,6 +1241,29 @@ mod tests {
                 .any(|issue| issue.code == "api.public-bind.no-auth")
         );
         Ok(())
+    }
+
+    #[test]
+    fn wildcard_cors_origin_is_blocking() {
+        let mut config = AppConfig::default();
+        config.api.cors_allowed_origins = vec!["*".to_string()];
+        let report = validate_config(&config);
+        assert!(!report.ok);
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|issue| issue.code == "api.cors-origin-wildcard")
+        );
+    }
+
+    #[test]
+    fn explicit_cors_origin_is_valid() {
+        let mut config = AppConfig::default();
+        config.api.allow_lan = true;
+        config.api.cors_allowed_origins = vec!["http://127.0.0.1:7707".to_string()];
+        let report = validate_config(&config);
+        assert!(report.ok);
     }
 
     #[test]

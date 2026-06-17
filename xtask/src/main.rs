@@ -43,6 +43,7 @@ fn ci() -> Result<()> {
     run("python3", &["scripts/static_validate.py"])?;
     run("python3", &["scripts/audit/handoff_audit.py"])?;
     run("python3", &["scripts/security/security-audit-smoke.py"])?;
+    run("cargo", &["deny", "check"])?;
     run("cargo", &["fmt", "--all", "--", "--check"])?;
     run(
         "cargo",

@@ -11,6 +11,7 @@
 
 ## Rust package
 
+- `cargo deny check` passes.
 - `cargo fmt --all -- --check` passes.
 - `cargo clippy --workspace --all-targets -- -D warnings` passes.
 - `cargo test --workspace` passes.

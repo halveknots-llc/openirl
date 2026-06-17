@@ -4,7 +4,11 @@ use anyhow::{Context, bail};
 use axum::{
     Json, Router,
     extract::{ConnectInfo, FromRequestParts, Path, Request, State},
-    http::{StatusCode, header::AUTHORIZATION, request::Parts},
+    http::{
+        HeaderValue, Method, StatusCode,
+        header::{AUTHORIZATION, CONTENT_TYPE},
+        request::Parts,
+    },
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -59,20 +63,24 @@ use openirl_v1::{
     V1EvidenceInput, build_v1_features, build_v1_implementation_summary, default_v1_package_layout,
     evaluate_v1_evidence, materialize_v1_package, sample_v1_evidence,
 };
-use regex::Regex;
+use openirl_vault::{redact_support_text, scrub_support_bundle_value};
 use serde::{Deserialize, Serialize};
 use std::{
     io::Read,
     net::SocketAddr,
     path::{Component, PathBuf},
-    sync::{Arc, OnceLock},
+    sync::Arc,
 };
 use time::OffsetDateTime;
 use tokio::{
     sync::RwLock,
     time::{Duration, sleep},
 };
-use tower_http::{cors::CorsLayer, services::ServeDir, trace::TraceLayer};
+use tower_http::{
+    cors::{AllowOrigin, CorsLayer},
+    services::ServeDir,
+    trace::TraceLayer,
+};
 use tracing_subscriber::{EnvFilter, fmt};
 
 /// Current schema revision.
@@ -926,7 +934,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Metrics { command } => match command {
             MetricsCommand::Simulate { scenario } => {
                 let scenario = MetricsScenario::parse(&scenario)
-                    .ok_or_else(|| anyhow::anyhow!("unknown metrics scenario: {}", scenario))?;
+                    .ok_or_else(|| anyhow::anyhow!("unknown metrics scenario: {scenario}"))?;
                 let snapshot = simulated_relay_snapshot(scenario, now_ms());
                 println!("{}", serde_json::to_string_pretty(&snapshot)?);
                 Ok(())
@@ -1068,11 +1076,7 @@ async fn serve(
         spawn_metrics_poll_loop(state.clone());
     }
 
-    let cors = if state.config.api.allow_lan {
-        CorsLayer::permissive()
-    } else {
-        CorsLayer::new()
-    };
+    let cors = cors_layer(&state.config);
 
     let app = Router::new()
         .route("/health", get(health))
@@ -1245,6 +1249,24 @@ fn log_validation_report(report: &ConfigValidationReport) {
     }
 }
 
+fn cors_layer(config: &AppConfig) -> CorsLayer {
+    let allowed_origins = config
+        .api
+        .cors_allowed_origins
+        .iter()
+        .filter_map(|origin| HeaderValue::from_str(origin.trim()).ok())
+        .collect::<Vec<_>>();
+
+    if allowed_origins.is_empty() {
+        CorsLayer::new()
+    } else {
+        CorsLayer::new()
+            .allow_origin(AllowOrigin::list(allowed_origins))
+            .allow_methods([Method::GET, Method::POST])
+            .allow_headers([AUTHORIZATION, CONTENT_TYPE])
+    }
+}
+
 fn build_obs_controller(config: &AppConfig) -> Arc<dyn ObsController> {
     match config.obs.adapter {
         ObsAdapterKind::DryRun => Arc::new(DryRunObsController::default()),
@@ -1295,6 +1317,7 @@ fn relay_process_configs_from_config(config: &AppConfig) -> Vec<RuntimeRelayProc
             metrics_url: media_metrics_url(config, process.kind),
             api_url: media_api_url(config, process.kind),
             log_tail_limit: 200,
+            redact_logs: config.security.redact_logs,
         })
         .collect()
 }
@@ -1814,11 +1837,13 @@ fn spawn_metrics_poll_loop(state: ApiState) {
 
             match collect_default_metric_snapshot(&state).await {
                 Ok(snapshot) => {
-                    if let Err(error) = apply_metrics_snapshot(&state, snapshot).await {
-                        tracing::warn!(error = %error, "metrics auto-poll sample could not be applied");
+                    if let Err(apply_error) = apply_metrics_snapshot(&state, snapshot).await {
+                        tracing::warn!(
+                            "metrics auto-poll sample could not be applied: {apply_error}"
+                        );
                     }
                 }
-                Err(error) => tracing::warn!(error = %error, "metrics auto-poll failed"),
+                Err(poll_error) => tracing::warn!("metrics auto-poll failed: {poll_error}"),
             }
 
             sleep(Duration::from_millis(
@@ -2961,8 +2986,7 @@ async fn api_field_report_export(
     let fallback_report = state.session.read().await.report().summary;
     let field_report_markdown = if body.trim().is_empty() {
         format!(
-            "# OpenIRL Field Report\n\nImplementation feature: {}\n\n{}\n",
-            OPENIRL_SCHEMA_REVISION, fallback_report
+            "# OpenIRL Field Report\n\nImplementation feature: {OPENIRL_SCHEMA_REVISION}\n\n{fallback_report}\n"
         )
     } else {
         body
@@ -3100,141 +3124,6 @@ async fn support_bundle_payload(state: &ApiState) -> serde_json::Value {
         "profile_support_matrix": support_matrix()
     });
     scrub_support_bundle_value(payload, state.config.security.support_bundle_redact_ips)
-}
-
-fn scrub_support_bundle_value(mut value: serde_json::Value, redact_ips: bool) -> serde_json::Value {
-    scrub_json_value(&mut value, redact_ips);
-    value
-}
-
-fn scrub_json_value(value: &mut serde_json::Value, redact_ips: bool) {
-    match value {
-        serde_json::Value::Object(map) => {
-            for (key, child) in map {
-                if support_bundle_secret_key(key) {
-                    *child = serde_json::Value::String("<redacted>".to_string());
-                } else {
-                    scrub_json_value(child, redact_ips);
-                }
-            }
-        }
-        serde_json::Value::Array(items) => {
-            for item in items {
-                scrub_json_value(item, redact_ips);
-            }
-        }
-        serde_json::Value::String(text) => {
-            *text = redact_support_text(text, redact_ips);
-        }
-        serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {}
-    }
-}
-
-fn support_bundle_secret_key(key: &str) -> bool {
-    let key = key.to_ascii_lowercase().replace('-', "_");
-    if key.ends_with("_env") || key.contains("without_token") {
-        return false;
-    }
-
-    key == "token"
-        || key.ends_with("_token")
-        || key.contains("access_token")
-        || key.contains("refresh_token")
-        || key.contains("dashboard_token")
-        || key.contains("password")
-        || key.contains("passphrase")
-        || key.contains("stream_key")
-        || key.contains("streamkey")
-        || key.contains("private_key")
-        || key.contains("authorization")
-        || key.contains("secret")
-}
-
-static PRIVATE_KEY_RE: OnceLock<Option<Regex>> = OnceLock::new();
-static BEARER_RE: OnceLock<Option<Regex>> = OnceLock::new();
-static URL_USERINFO_RE: OnceLock<Option<Regex>> = OnceLock::new();
-static QUERY_SECRET_RE: OnceLock<Option<Regex>> = OnceLock::new();
-static ASSIGNMENT_SECRET_RE: OnceLock<Option<Regex>> = OnceLock::new();
-static IPV4_RE: OnceLock<Option<Regex>> = OnceLock::new();
-
-fn cached_regex(
-    cell: &'static OnceLock<Option<Regex>>,
-    pattern: &'static str,
-) -> Option<&'static Regex> {
-    cell.get_or_init(|| Regex::new(pattern).ok()).as_ref()
-}
-
-fn redact_support_text(input: &str, redact_ips: bool) -> String {
-    let mut redacted = input.to_string();
-    redacted = replace_support_pattern(
-        &redacted,
-        &PRIVATE_KEY_RE,
-        r"(?is)-----BEGIN [^-]*PRIVATE KEY-----.*?-----END [^-]*PRIVATE KEY-----",
-        "[redacted-private-key]",
-    );
-    redacted = replace_support_pattern(
-        &redacted,
-        &BEARER_RE,
-        r"(?i)Bearer\s+[A-Za-z0-9._~+/=-]+",
-        "Bearer <redacted>",
-    );
-    redacted = replace_support_pattern(
-        &redacted,
-        &URL_USERINFO_RE,
-        r"(?i)(?P<prefix>[a-z][a-z0-9+.-]*://[^/\s:@]+:)[^@\s/]+@",
-        "${prefix}<redacted>@",
-    );
-    redacted = replace_support_pattern(
-        &redacted,
-        &QUERY_SECRET_RE,
-        r#"(?i)(?P<prefix>[?&](?:passphrase|token|stream[_-]?key|password|secret|authorization|auth)=)[^&\s"'<>)]*"#,
-        "${prefix}<redacted>",
-    );
-    redacted = replace_support_pattern(
-        &redacted,
-        &ASSIGNMENT_SECRET_RE,
-        r#"(?im)(?P<prefix>\b(?:password|passphrase|stream[_-]?key|secret|authorization|bearer[_-]?token|access[_-]?token|refresh[_-]?token|dashboard[_-]?token|obs[_-]?password)\b\s*[:=]\s*)["']?[^"',\n\r}]+["']?"#,
-        "${prefix}<redacted>",
-    );
-
-    if redact_ips {
-        redact_ip_addresses(&redacted)
-    } else {
-        redacted
-    }
-}
-
-fn replace_support_pattern(
-    input: &str,
-    cell: &'static OnceLock<Option<Regex>>,
-    pattern: &'static str,
-    replacement: &str,
-) -> String {
-    if let Some(regex) = cached_regex(cell, pattern) {
-        regex.replace_all(input, replacement).into_owned()
-    } else {
-        input.to_string()
-    }
-}
-
-fn redact_ip_addresses(input: &str) -> String {
-    let Some(regex) = cached_regex(
-        &IPV4_RE,
-        r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b",
-    ) else {
-        return input.to_string();
-    };
-
-    regex
-        .replace_all(input, |captures: &regex::Captures<'_>| {
-            let value = captures.get(0).map_or("", |capture| capture.as_str());
-            if value.starts_with("127.") || value == "0.0.0.0" {
-                value.to_string()
-            } else {
-                "<redacted-ip>".to_string()
-            }
-        })
-        .into_owned()
 }
 
 async fn api_session_reset(State(state): State<ApiState>, _auth: ControlAuth) -> impl IntoResponse {

@@ -21,6 +21,10 @@ Expected evidence:
 
 Loopback dashboard access may be tokenless when `allow_loopback_without_token` is enabled. Non-loopback API requests require authorization when `require_auth_outside_localhost` is true. Public bind without auth must be rejected during config validation.
 
+Dashboard bearer tokens are held only for the current page session by the bundled static dashboard. They are not persisted to browser `localStorage`.
+
+CORS is same-origin only by default. If an operator serves a custom dashboard from a different browser origin, list that exact `http://` or `https://` origin in `api.cors_allowed_origins`; wildcard origins are rejected by config validation.
+
 Use this check when changing bind or auth behavior:
 
 ```bash

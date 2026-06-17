@@ -630,8 +630,12 @@ mod tests {
 
     #[test]
     fn auth_response_is_deterministic() {
-        let first = obs_auth_response("password", "salt", "challenge");
-        let second = obs_auth_response("password", "salt", "challenge");
+        let marker = std::process::id();
+        let password = format!("credential-{marker}");
+        let salt = format!("salt-{marker}");
+        let challenge = format!("challenge-{marker}");
+        let first = obs_auth_response(&password, &salt, &challenge);
+        let second = obs_auth_response(&password, &salt, &challenge);
         assert_eq!(first, second);
         assert!(!first.is_empty());
     }
