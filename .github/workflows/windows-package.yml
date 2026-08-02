@@ -1,0 +1,153 @@
+name: windows-package
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build portable alpha
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Rust toolchain
+        run: rustup show
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --version 0.19.7 --locked
+      - name: Build source-pinned package
+        shell: pwsh
+        run: >-
+          ./scripts/windows/build-alpha-portable.ps1
+          -ExpectedRevision "${{ github.sha }}"
+      - name: Require a version-matched release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $manifest = Get-Content -Raw dist/windows-alpha/openirl-windows-portable-alpha.manifest.json | ConvertFrom-Json
+          if ("v$($manifest.package_version)" -ne "${{ github.ref_name }}") {
+            throw 'Release tag does not match the Cargo package version'
+          }
+          git merge-base --is-ancestor "${{ github.sha }}" origin/main
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Release tag commit is not reachable from origin/main'
+          }
+      - name: Upload package evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-portable-${{ github.sha }}
+          path: |
+            dist/windows-alpha/openirl-windows-portable-alpha.zip
+            dist/windows-alpha/openirl-windows-portable-alpha.zip.sha256
+            dist/windows-alpha/openirl-windows-portable-alpha.manifest.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  verify:
+    name: Verify on clean runner
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download package evidence
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: windows-portable-${{ github.sha }}
+          path: dist/windows-alpha
+      - name: Verify archive, manifest, and packaged CLIs
+        shell: pwsh
+        run: >-
+          ./scripts/windows/verify-alpha-portable.ps1
+          -ArtifactDir dist/windows-alpha
+          -ExpectedRevision "${{ github.sha }}"
+      - name: Upload independent verification report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-portable-verification-${{ github.sha }}
+          path: dist/windows-alpha/openirl-windows-portable-alpha.verification.json
+          if-no-files-found: error
+          retention-days: 14
+
+  provenance:
+    name: Sign build provenance
+    if: github.event_name != 'pull_request'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download package evidence
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: windows-portable-${{ github.sha }}
+          path: release-files
+      - name: Download independent verification report
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: windows-portable-verification-${{ github.sha }}
+          path: release-files
+      - name: Generate signed SLSA provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: |
+            release-files/openirl-windows-portable-alpha.zip
+            release-files/openirl-windows-portable-alpha.zip.sha256
+            release-files/openirl-windows-portable-alpha.manifest.json
+            release-files/openirl-windows-portable-alpha.verification.json
+
+  release:
+    name: Publish alpha prerelease
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: provenance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Download package evidence
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: windows-portable-${{ github.sha }}
+          path: release-files
+      - name: Download independent verification report
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: windows-portable-verification-${{ github.sha }}
+          path: release-files
+      - name: Publish immutable-tag prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${{ github.ref_name }}"
+          release-files/*
+          --repo "${{ github.repository }}"
+          --verify-tag
+          --prerelease
+          --title "OpenIRL ${{ github.ref_name }}"
+          --notes-file release/ALPHA_RELEASE_NOTES.md

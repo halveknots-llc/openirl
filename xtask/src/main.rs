@@ -40,10 +40,15 @@ fn main() -> Result<()> {
 }
 
 fn ci() -> Result<()> {
-    run("python3", &["scripts/static_validate.py"])?;
-    run("python3", &["scripts/audit/handoff_audit.py"])?;
-    run("python3", &["scripts/security/security-audit-smoke.py"])?;
-    run("python3", &["scripts/smoke/demo-mode-smoke.py"])?;
+    let python = python_command();
+    run(python, &["scripts/static_validate.py"])?;
+    run(python, &["scripts/audit/handoff_audit.py"])?;
+    run(python, &["scripts/security/security-audit-smoke.py"])?;
+    run(
+        python,
+        &["scripts/security/release-artifact-scan.py", "--self-test"],
+    )?;
+    run(python, &["scripts/smoke/demo-mode-smoke.py"])?;
     run("cargo", &["deny", "check"])?;
     run("cargo", &["fmt", "--all", "--", "--check"])?;
     run(
@@ -59,6 +64,10 @@ fn ci() -> Result<()> {
     )?;
     run("cargo", &["test", "--workspace"])?;
     Ok(())
+}
+
+fn python_command() -> &'static str {
+    if cfg!(windows) { "python" } else { "python3" }
 }
 
 fn run(program: &str, args: &[&str]) -> Result<()> {

@@ -9,6 +9,7 @@ Start here if you are evaluating, operating, or contributing to OpenIRL.
 - [Compatibility evidence](COMPATIBILITY.md): versioned source, local-runtime, integration, field, and release claims.
 - [Maintainer checks](MAINTAINER_CHECKS.md): release-claim rules and live dependency evidence checklist.
 - [Release checklist](RELEASE_CHECKLIST.md): package and live-environment gates for alpha releases.
+- [Release provenance](RELEASE_PROVENANCE.md): Windows package manifest, independent verification, signed attestation, and claim boundaries.
 
 ## System Design
 

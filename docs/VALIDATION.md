@@ -6,6 +6,7 @@
 python3 scripts/static_validate.py
 python3 scripts/audit/handoff_audit.py
 python3 scripts/security/security-audit-smoke.py
+python3 scripts/security/release-artifact-scan.py --self-test
 python3 scripts/smoke/demo-mode-smoke.py
 cargo deny check
 cargo run --package openirl-agent -- compatibility-validate --file compatibility/matrix-v1.json
@@ -21,7 +22,11 @@ cargo test --workspace
 cargo xtask ci
 ```
 
-`cargo xtask ci` runs static validation, handoff audit, security smoke, deterministic demo smoke, Cargo advisory/license/source policy through `cargo deny check`, formatting, Clippy with warnings denied, and the workspace test suite.
+`cargo xtask ci` runs static validation, handoff audit, security smoke, the
+release-artifact scanner self-test, deterministic demo smoke, Cargo
+advisory/license/source policy through `cargo deny check`, formatting, Clippy
+with warnings denied, and the workspace test suite. On Windows, the task uses
+the `python` launcher supplied by the runner.
 
 The handoff audit is the historical script name for the source-readiness audit. It verifies that public docs, feature inventory, package evidence, and readiness claims stay aligned.
 

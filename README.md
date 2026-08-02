@@ -69,7 +69,7 @@ The project goal is straightforward: keep the live show under the operator's con
 
 ## Status
 
-OpenIRL is a public-source alpha. The repository includes automated validation for the local agent, API contracts, config model, feature catalog, profile generation, support artifacts, and safety rules. Downloadable runtime releases are not claimed until the Windows artifact workflow and matching evidence complete.
+OpenIRL is a public-source alpha. The repository includes automated validation for the local agent, API contracts, config model, feature catalog, profile generation, support artifacts, and safety rules. A downloadable runtime release is claimed only when a version tag completes the Windows build, independent verification, and signed-provenance workflow.
 
 The source package also includes live smoke scripts for OBS, MediaMTX, relay, mobile encoder, tunnel, WebRTC preview, and Windows packaging environments. Those checks require the real external tools and devices. Treat automated Rust/API validation as source-level proof; treat live OBS, MediaMTX, mobile encoder, BELABOX, SRTLA, tunnel, and Windows-package success as proven only after the matching smoke script runs in that environment.
 
@@ -152,6 +152,8 @@ If dashboard auth is enabled and `OPENIRL_DASHBOARD_TOKEN` is configured, the sm
 | Materialize fallback assets | `cargo run --package openirl-agent -- artifacts materialize-fallback` |
 | Materialize an OBS template | `cargo run --package openirl-agent -- artifacts obs-template --materialize` |
 | Run the broad repository gate | `cargo xtask ci` |
+| Build a source-pinned Windows portable artifact | `.\scripts\windows\build-alpha-portable.ps1` on Windows |
+| Verify a Windows portable artifact | `.\scripts\windows\verify-alpha-portable.ps1 -ExpectedRevision <full-source-revision>` on Windows |
 
 ## Validation Model
 
@@ -180,7 +182,8 @@ Run these only in an environment with the named external dependency available.
 | `scripts/relay/srtla2-compat-smoke.sh` | SRTLA-compatible tooling | Checks bonding-oriented configuration and metrics expectations. |
 | `scripts/tunnels/tunnel-readiness-smoke.sh` | WireGuard, frp, or rathole setup | Checks tunnel readiness for CGNAT and no-public-IP users. |
 | `scripts/webrtc/webrtc-preview-smoke.sh` | WHEP/WebRTC preview stack | Verifies producer preview planning and access boundaries. |
-| `scripts/windows/build-alpha-portable.ps1` | Windows build host | Builds the Windows alpha package layout. |
+| `scripts/windows/build-alpha-portable.ps1` | Clean Windows build host | Builds a source-pinned package, checksum, and per-file manifest. |
+| `scripts/windows/verify-alpha-portable.ps1` | Separate clean Windows host | Verifies the archive and launches both packaged CLIs without claiming live integrations. |
 
 ## Architecture
 
@@ -238,6 +241,7 @@ OpenIRL intentionally keeps media engines process-bound. Rust coordinates config
 | [Compatibility evidence](docs/COMPATIBILITY.md) | Versioned dependency matrix, evidence maturity, and field contribution rules. |
 | [Maintainer checks](docs/MAINTAINER_CHECKS.md) | Release-claim rules and live dependency evidence checklist. |
 | [Release checklist](docs/RELEASE_CHECKLIST.md) | Package and live-environment gates for alpha releases. |
+| [Release provenance](docs/RELEASE_PROVENANCE.md) | Repeatable Windows artifacts, independent verification, attestations, and signing boundaries. |
 | [Product roadmap](docs/ROADMAP.md) | Current source status, public milestones, and contributor priorities. |
 | [Security model](docs/SECURITY.md) | Local-first defaults, roles, public bind posture, and support-bundle guidance. |
 | [No-video troubleshooting](docs/troubleshooting/no-video.md) | First-response checks for missing contribution media. |
