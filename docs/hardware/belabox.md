@@ -21,3 +21,7 @@ BELABOX workflows are useful for backpack encoder and bonding-oriented field pat
 ## Evidence
 
 Record BELABOX software or hardware version, receiver tool, protocol, relay host class, and the observed recovery behavior. Do not publish passphrases, private relay credentials, device identifiers, or location-adjacent notes.
+
+Submit a reviewed result against the `belabox-profile` row using the
+[compatibility evidence process](../COMPATIBILITY.md). Keep raw production logs
+and unreviewed support bundles out of the public issue.

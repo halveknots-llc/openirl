@@ -77,7 +77,7 @@ def main() -> int:
                 if pat.search(line):
                     findings.append({'path':relative,'line':idx,'category':'denied-marker','message':line.strip()[:200]})
                     break
-    required_docs = ['docs/features/obs-reconciliation.md','docs/features/local-ingest.md','docs/features/encoder-profiles.md','docs/features/dashboard.md','docs/features/security.md','docs/features/brownout.md','docs/VALIDATION.md','docs/RELEASE_CHECKLIST.md']
+    required_docs = ['docs/features/obs-reconciliation.md','docs/features/local-ingest.md','docs/features/encoder-profiles.md','docs/features/dashboard.md','docs/features/security.md','docs/features/brownout.md','docs/VALIDATION.md','docs/RELEASE_CHECKLIST.md','docs/COMPATIBILITY.md','compatibility/matrix-v1.json']
     for item in required_docs:
         if not (ROOT/item).exists():
             findings.append({'path':item,'category':'inventory','message':'required source-readiness doc missing'})

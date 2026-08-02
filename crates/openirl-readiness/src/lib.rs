@@ -51,6 +51,24 @@ pub enum EvidenceScope {
     LiveEnvironment,
 }
 
+/// Highest evidence maturity established for a feature or compatibility row.
+#[derive(Debug, Clone, Copy, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum EvidenceMaturity {
+    /// Interfaces or workflows are modeled but not yet exercised as source behavior.
+    Modeled,
+    /// Source contracts and automated tests passed.
+    SourceValidated,
+    /// A local process or deterministic runtime path passed without a real dependency.
+    LocalRuntimeValidated,
+    /// The named real dependency passed in a controlled integration environment.
+    IntegrationValidated,
+    /// A real operator/device/network field session passed.
+    FieldValidated,
+    /// A downloadable release carries matching verification evidence.
+    Released,
+}
+
 /// State of one readiness check.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]

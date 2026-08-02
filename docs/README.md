@@ -6,6 +6,7 @@ Start here if you are evaluating, operating, or contributing to OpenIRL.
 
 - [Quickstart](guides/quickstart.md): run the deterministic local demo, inspect the scoped readiness report, then move into live OBS and MediaMTX checks when those dependencies are available.
 - [Validation](VALIDATION.md): authoritative source and runtime validation commands.
+- [Compatibility evidence](COMPATIBILITY.md): versioned source, local-runtime, integration, field, and release claims.
 - [Maintainer checks](MAINTAINER_CHECKS.md): release-claim rules and live dependency evidence checklist.
 - [Release checklist](RELEASE_CHECKLIST.md): package and live-environment gates for alpha releases.
 
@@ -26,6 +27,9 @@ Start here if you are evaluating, operating, or contributing to OpenIRL.
 - [Moblin](hardware/moblin.md)
 - [IRL Pro](hardware/irl-pro.md)
 - [BELABOX](hardware/belabox.md)
+
+Use the [compatibility matrix](COMPATIBILITY.md) to distinguish generated-profile
+source checks from real app, device, relay, and network evidence.
 
 ## Feature Areas
 

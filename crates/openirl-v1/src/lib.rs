@@ -5,6 +5,7 @@
 //! local-first: no managed cloud account is required to evaluate the plans or
 //! write package contents.
 
+pub use openirl_readiness::EvidenceMaturity as FeatureStatus;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -36,14 +37,6 @@ pub enum Priority {
     P2,
     /// Advanced ecosystem polish.
     P3,
-}
-
-/// Implementation status for a feature area.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum FeatureStatus {
-    /// Implemented as a Rust/domain/API contract with validation evidence paths.
-    Implemented,
 }
 
 /// A public-beta feature area.
@@ -217,7 +210,7 @@ macro_rules! feature_area {
             key: s($key),
             title: s($title),
             priority: $priority,
-            status: FeatureStatus::Implemented,
+            status: feature_status($key),
             outcome: s($outcome),
             features: $features.iter().map(|value| s(value)).collect(),
             surfaces: $surfaces.iter().map(|value| s(value)).collect(),
@@ -225,6 +218,26 @@ macro_rules! feature_area {
             acceptance_gate: s($acceptance_gate),
         }
     };
+}
+
+fn feature_status(key: &str) -> FeatureStatus {
+    match key {
+        "dashboard" | "security" | "brownout" | "support-bundles" => {
+            FeatureStatus::LocalRuntimeValidated
+        }
+        "obs-reconciliation"
+        | "local-ingest"
+        | "encoder-profiles"
+        | "obs-output"
+        | "backup-ingest"
+        | "moderation"
+        | "self-hosted-relay"
+        | "alpha-source-package"
+        | "docs"
+        | "public-beta-security"
+        | "vertical-clips" => FeatureStatus::SourceValidated,
+        _ => FeatureStatus::Modeled,
+    }
 }
 
 /// Returns all public-beta feature areas.
@@ -1197,4 +1210,37 @@ fn v1_readiness_notes() -> String {
     s(
         "# V1 Readiness\n\nV1 readiness requires Rust CI, OBS reconciliation, local ingest, mobile encoder profile checks, security review, support-bundle export, and public package verification.\n",
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn feature_catalog_uses_evidence_maturity_instead_of_one_implemented_state() {
+        let features = build_v1_features();
+        assert!(
+            features
+                .iter()
+                .any(|feature| feature.status == FeatureStatus::Modeled)
+        );
+        assert!(
+            features
+                .iter()
+                .any(|feature| feature.status == FeatureStatus::SourceValidated)
+        );
+        assert!(
+            features
+                .iter()
+                .any(|feature| { feature.status == FeatureStatus::LocalRuntimeValidated })
+        );
+        assert!(!features.iter().any(|feature| {
+            matches!(
+                feature.status,
+                FeatureStatus::IntegrationValidated
+                    | FeatureStatus::FieldValidated
+                    | FeatureStatus::Released
+            )
+        }));
+    }
 }
