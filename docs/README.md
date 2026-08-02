@@ -4,7 +4,7 @@ Start here if you are evaluating, operating, or contributing to OpenIRL.
 
 ## First Run
 
-- [Quickstart](guides/quickstart.md): validate the source package, inspect the example config, start the local dashboard, then move into live OBS and MediaMTX checks when those dependencies are available.
+- [Quickstart](guides/quickstart.md): run the deterministic local demo, inspect the scoped readiness report, then move into live OBS and MediaMTX checks when those dependencies are available.
 - [Validation](VALIDATION.md): authoritative source and runtime validation commands.
 - [Maintainer checks](MAINTAINER_CHECKS.md): release-claim rules and live dependency evidence checklist.
 - [Release checklist](RELEASE_CHECKLIST.md): package and live-environment gates for alpha releases.

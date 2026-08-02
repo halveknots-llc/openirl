@@ -55,6 +55,7 @@ use openirl_production::{
 };
 use openirl_profiles::{GeneratedProfile, ProfileRequest, generate_profile, support_matrix};
 use openirl_qr::{QrRenderRequest, render_qr_svg};
+use openirl_readiness::{RuntimeMode, build_readiness_report, demo_config, demo_snapshots};
 use openirl_relay_control::{
     RelayBackend, RelayEnvPair, RelayLaunchPlan, RelayProcessConfig as RuntimeRelayProcessConfig,
     RelayRuntimeStatus, RelaySupervisor, build_credential_plan,
@@ -112,6 +113,18 @@ enum Command {
         /// Optional OBS adapter override.
         #[arg(long, value_enum)]
         obs_adapter: Option<ObsAdapterArg>,
+    },
+    /// Start a deterministic local-only dashboard demonstration.
+    Demo {
+        /// Loopback address for the demo dashboard.
+        #[arg(long, default_value = "127.0.0.1:7707")]
+        bind: SocketAddr,
+    },
+    /// Print a redacted readiness report without inferring source or live results.
+    Readiness {
+        /// Optional config path.
+        #[arg(long)]
+        config: Option<PathBuf>,
     },
     /// Validate the config and print a redacted readiness report.
     CheckConfig {
@@ -531,6 +544,7 @@ impl From<DeploymentModeArg> for openirl_core::DeploymentMode {
 #[derive(Clone)]
 struct ApiState {
     started_at: OffsetDateTime,
+    mode: RuntimeMode,
     config: AppConfig,
     health_engine: Arc<RwLock<HealthEngine>>,
     obs: Arc<dyn ObsController>,
@@ -620,6 +634,18 @@ async fn main() -> anyhow::Result<()> {
             bind,
             obs_adapter,
         } => serve(config, bind, obs_adapter).await,
+        Command::Demo { bind } => serve_demo(bind).await,
+        Command::Readiness { config } => {
+            let config = load_config_or_default(config)?;
+            let report = build_readiness_report(
+                &config,
+                OPENIRL_SCHEMA_REVISION,
+                RuntimeMode::Standard,
+                false,
+            )?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        }
         Command::CheckConfig { config } => check_config(config),
         Command::InstallPlan { config } => {
             let config = load_config_or_default(config)?;
@@ -1031,6 +1057,17 @@ async fn serve(
         config.api.bind = bind;
     }
 
+    serve_config(config, RuntimeMode::Standard).await
+}
+
+async fn serve_demo(bind: SocketAddr) -> anyhow::Result<()> {
+    if !bind.ip().is_loopback() {
+        bail!("demo mode only accepts a loopback bind address");
+    }
+    serve_config(demo_config(bind), RuntimeMode::Demo).await
+}
+
+async fn serve_config(config: AppConfig, mode: RuntimeMode) -> anyhow::Result<()> {
     let validation_report = validate_config(&config);
     log_validation_report(&validation_report);
     if !validation_report.ok {
@@ -1064,6 +1101,7 @@ async fn serve(
         .max(1);
     let state = ApiState {
         started_at: OffsetDateTime::now_utc(),
+        mode,
         config,
         health_engine: Arc::new(RwLock::new(HealthEngine::new())),
         obs,
@@ -1074,6 +1112,14 @@ async fn serve(
         session: Arc::new(RwLock::new(SessionStore::with_limit(history_limit))),
         markers: Arc::new(RwLock::new(ClipMarkerStore::new(history_limit))),
     };
+
+    if mode == RuntimeMode::Demo {
+        for snapshot in demo_snapshots() {
+            apply_metrics_snapshot(&state, snapshot)
+                .await
+                .map_err(anyhow::Error::msg)?;
+        }
+    }
 
     if state.config.metrics.enabled && state.config.metrics.auto_poll {
         spawn_metrics_poll_loop(state.clone());
@@ -1086,6 +1132,7 @@ async fn serve(
         .route("/api/state", get(api_state))
         .route("/api/config/redacted", get(api_config_redacted))
         .route("/api/config/validation", get(api_config_validation))
+        .route("/api/readiness", get(api_readiness))
         .route("/api/runtime/readiness", get(api_runtime_readiness))
         .route("/api/auth/status", get(api_auth_status))
         .route("/api/auth/check", post(api_auth_check))
@@ -1411,6 +1458,20 @@ async fn api_config_redacted(
 
 async fn api_config_validation(State(state): State<ApiState>) -> Json<ConfigValidationReport> {
     Json(validate_config(&state.config))
+}
+
+async fn api_readiness(State(state): State<ApiState>) -> Response {
+    match build_readiness_report(&state.config, OPENIRL_SCHEMA_REVISION, state.mode, true) {
+        Ok(report) => Json(report).into_response(),
+        Err(error) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": "readiness-report-failed",
+                "message": error.to_string()
+            })),
+        )
+            .into_response(),
+    }
 }
 
 async fn api_runtime_readiness(State(state): State<ApiState>) -> impl IntoResponse {
@@ -2220,6 +2281,7 @@ async fn api_state(State(state): State<ApiState>) -> impl IntoResponse {
     let session = state.session.read().await.snapshot();
     Json(serde_json::json!({
         "app": "openirl-agent",
+        "mode": state.mode,
         "started_at": state.started_at.to_string(),
         "bind": state.config.api.bind,
         "allow_lan": state.config.api.allow_lan,
