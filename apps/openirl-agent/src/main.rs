@@ -24,7 +24,7 @@ use openirl_artifacts::{
     materialize_alpha_source_layout, materialize_fallback_assets, materialize_obs_scene_template,
 };
 use openirl_auth::{
-    AuthPolicy, auth_status, browser_origin_is_allowed, browser_origin_is_same_origin,
+    AuthPolicy, auth_status, browser_origin_is_allowed, browser_request_is_trusted_local,
     verify_authorization_header,
 };
 use openirl_config::{
@@ -1546,8 +1546,8 @@ async fn require_api_auth(State(state): State<ApiState>, request: Request, next:
         return next.run(request).await;
     }
 
-    let same_origin = match browser_request_origin(&state.config, request.headers()) {
-        Ok(same_origin) => same_origin,
+    let trusted_local_origin = match browser_request_origin(&state.config, request.headers()) {
+        Ok(trusted_local_origin) => trusted_local_origin,
         Err(message) => {
             return (
                 StatusCode::FORBIDDEN,
@@ -1565,7 +1565,8 @@ async fn require_api_auth(State(state): State<ApiState>, request: Request, next:
         .headers()
         .get(AUTHORIZATION)
         .and_then(|value| value.to_str().ok());
-    let is_loopback_request = request_is_loopback(request.extensions(), &state) && same_origin;
+    let is_loopback_request =
+        request_is_loopback(request.extensions(), &state) && trusted_local_origin;
     let decision = verify_authorization_header(
         &policy,
         token_value.as_deref(),
@@ -1596,7 +1597,11 @@ fn browser_request_origin(config: &AppConfig, headers: &HeaderMap) -> Result<boo
             "State-changing API requests require a same-origin browser request or an explicitly configured origin with authentication.",
         );
     }
-    Ok(browser_origin_is_same_origin(origin, host))
+    Ok(browser_request_is_trusted_local(
+        origin,
+        host,
+        config.api.bind,
+    ))
 }
 
 fn request_is_loopback(extensions: &axum::http::Extensions, state: &ApiState) -> bool {
@@ -1618,7 +1623,7 @@ impl FromRequestParts<ApiState> for ControlAuth {
         parts: &mut Parts,
         state: &ApiState,
     ) -> Result<Self, Self::Rejection> {
-        let same_origin = match browser_request_origin(&state.config, &parts.headers) {
+        let trusted_local_origin = match browser_request_origin(&state.config, &parts.headers) {
             Ok(value) => value,
             Err(message) => {
                 return Err((
@@ -1636,7 +1641,8 @@ impl FromRequestParts<ApiState> for ControlAuth {
             .headers
             .get(AUTHORIZATION)
             .and_then(|value| value.to_str().ok());
-        let is_loopback_request = request_is_loopback(&parts.extensions, state) && same_origin;
+        let is_loopback_request =
+            request_is_loopback(&parts.extensions, state) && trusted_local_origin;
         let decision = verify_authorization_header(
             &policy,
             token_value.as_deref(),
@@ -3319,6 +3325,18 @@ mod tests {
         headers.insert(HOST, HeaderValue::from_static("127.0.0.1:7707"));
         headers.insert(ORIGIN, HeaderValue::from_static("https://attacker.example"));
         assert!(browser_request_origin(&config, &headers).is_err());
+    }
+
+    #[test]
+    fn browser_origin_guard_requires_configured_loopback_authority() {
+        let config = AppConfig::default();
+        let mut headers = HeaderMap::new();
+        headers.insert(HOST, HeaderValue::from_static("untrusted.example:7707"));
+        headers.insert(
+            ORIGIN,
+            HeaderValue::from_static("http://untrusted.example:7707"),
+        );
+        assert_eq!(browser_request_origin(&config, &headers), Ok(false));
     }
 
     #[test]

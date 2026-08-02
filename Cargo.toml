@@ -59,6 +59,8 @@ axum = { version = "0.8", features = ["macros", "ws"] }
 base64 = "0.22"
 clap = { version = "4", features = ["derive", "env"] }
 futures-util = "0.3"
+http = "1"
+percent-encoding = "2"
 tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect", "rustls-tls-native-roots"] }
 rand = "0.8"
 qrcode = "0.14"

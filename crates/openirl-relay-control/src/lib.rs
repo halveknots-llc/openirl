@@ -5,7 +5,7 @@
 //! agent safe to iterate while preserving a future path to native adapters.
 
 use openirl_core::{DeploymentMode, Protocol};
-use openirl_vault::redact_support_text;
+use openirl_vault::{redact_command_args, redact_support_text};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
@@ -607,7 +607,7 @@ fn redacted_command(config: &RelayProcessConfig, resolved_path: Option<String>) 
         }
     });
     command.push(public_executable_name(Path::new(&executable)));
-    command.extend(redact_args(&config.args));
+    command.extend(redact_command_args(&config.args));
     command
 }
 
@@ -619,46 +619,6 @@ fn public_executable_name(path: &Path) -> String {
             || "<unresolved-relay-executable>".to_string(),
             str::to_string,
         )
-}
-
-fn redact_args(args: &[String]) -> Vec<String> {
-    let mut redacted = Vec::with_capacity(args.len());
-    let mut redact_next = false;
-    for arg in args {
-        if redact_next {
-            redacted.push("<redacted>".to_string());
-            redact_next = false;
-            continue;
-        }
-        if sensitive_argument(arg) {
-            if arg.contains('=') {
-                redacted.push("<redacted>".to_string());
-            } else {
-                redacted.push(arg.clone());
-                redact_next = true;
-            }
-        } else {
-            redacted.push(arg.clone());
-        }
-    }
-    redacted
-}
-
-fn sensitive_argument(value: &str) -> bool {
-    let lowered = value.to_ascii_lowercase();
-    [
-        "passphrase",
-        "password",
-        "secret",
-        "token",
-        "streamkey",
-        "stream_key",
-        "authorization",
-        "api_key",
-        "private_key",
-    ]
-    .into_iter()
-    .any(|marker| lowered.contains(marker))
 }
 
 fn resolve_executable(config: &RelayProcessConfig) -> Option<PathBuf> {
@@ -850,7 +810,7 @@ mod tests {
     #[test]
     fn redaction_masks_secret_arguments() {
         assert_eq!(
-            redact_args(&[
+            redact_command_args(&[
                 "--passphrase".to_string(),
                 "abc".to_string(),
                 "--token=def".to_string(),
@@ -859,7 +819,7 @@ mod tests {
             vec![
                 "--passphrase".to_string(),
                 "<redacted>".to_string(),
-                "<redacted>".to_string(),
+                "--token=<redacted>".to_string(),
                 "--port=9000".to_string(),
             ]
         );
