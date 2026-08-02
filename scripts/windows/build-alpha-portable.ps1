@@ -12,9 +12,19 @@ $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $root
 
+if ($SkipCargoBuild -and $env:OPENIRL_ALLOW_UNVALIDATED_PACKAGE -ne '1') {
+  throw 'SkipCargoBuild requires OPENIRL_ALLOW_UNVALIDATED_PACKAGE=1 and is not valid for a release candidate'
+}
+
 if (-not $SkipCargoBuild) {
   cargo xtask ci
   cargo build --workspace --release --features openirl-agent/obs-websocket
+}
+
+foreach ($binary in @('target\release\openirl-agent.exe', 'target\release\openirl-desktop.exe')) {
+  if (-not (Test-Path $binary)) {
+    throw "required package binary is missing: $binary"
+  }
 }
 
 $stage = Join-Path $OutDir 'OpenIRL'
@@ -31,6 +41,8 @@ Copy-Item "apps\openirl-agent\static\*" (Join-Path $stage 'static') -Recurse -Fo
 Copy-Item "scripts\smoke\*.ps1" (Join-Path $stage 'scripts') -Force
 Copy-Item "README.md" (Join-Path $stage 'README.md') -Force
 Copy-Item "docs\runbooks\WINDOWS_OBS_ALPHA.md" (Join-Path $stage 'WINDOWS_OBS_ALPHA.md') -Force
+$revision = (git rev-parse HEAD).Trim()
+Set-Content -Encoding ASCII (Join-Path $stage 'source-revision.txt') $revision
 
 $zip = Join-Path $OutDir 'openirl-windows-portable-alpha.zip'
 if (Test-Path $zip) { Remove-Item -Force $zip }

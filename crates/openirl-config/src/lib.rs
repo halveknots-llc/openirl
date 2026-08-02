@@ -55,6 +55,12 @@ impl AppConfig {
     /// Returns a dashboard-safe config snapshot.
     #[must_use]
     pub fn redacted(&self) -> RedactedAppConfig {
+        let mut relay = self.relay.clone();
+        redact_relay_config(&mut relay);
+        let mut metrics = self.metrics.clone();
+        metrics.mediamtx_metrics_url = redact_endpoint_url(&metrics.mediamtx_metrics_url);
+        let mut artifacts = self.artifacts.clone();
+        redact_artifact_config(&mut artifacts);
         RedactedAppConfig {
             api: self.api.clone(),
             runtime: self.runtime.clone(),
@@ -69,10 +75,10 @@ impl AppConfig {
                 create_missing_scenes: self.obs.create_missing_scenes,
             },
             ingest: self.ingest.clone(),
-            relay: self.relay.clone(),
-            metrics: self.metrics.clone(),
+            relay,
+            metrics,
             security: self.security.clone(),
-            artifacts: self.artifacts.clone(),
+            artifacts,
             scenes: self.scenes.clone(),
         }
     }
@@ -82,6 +88,130 @@ impl AppConfig {
     pub fn validate(&self) -> ConfigValidationReport {
         validate_config(self)
     }
+}
+
+fn redact_relay_config(relay: &mut RelayConfig) {
+    relay.mediamtx_config_path = redact_local_path(&relay.mediamtx_config_path);
+    relay.mediamtx_api_url = redact_endpoint_url(&relay.mediamtx_api_url);
+    relay.mediamtx_metrics_url = redact_endpoint_url(&relay.mediamtx_metrics_url);
+    for process in &mut relay.processes {
+        process.executable = redact_local_path(&process.executable);
+        process.working_dir = process.working_dir.as_deref().map(redact_local_path);
+        process.args = redact_command_args(&process.args);
+        process.env.iter_mut().for_each(|env| {
+            env.value = "<redacted-env-value>".to_string();
+        });
+    }
+}
+
+fn redact_artifact_config(artifacts: &mut ArtifactsConfig) {
+    artifacts.fallback_assets_dir = redact_local_path(&artifacts.fallback_assets_dir);
+    artifacts.obs_templates_dir = redact_local_path(&artifacts.obs_templates_dir);
+    artifacts.support_bundles_dir = redact_local_path(&artifacts.support_bundles_dir);
+    artifacts.field_reports_dir = redact_local_path(&artifacts.field_reports_dir);
+    artifacts.alpha_package_dir = redact_local_path(&artifacts.alpha_package_dir);
+}
+
+fn redact_local_path(value: &str) -> String {
+    if Path::new(value).is_absolute() {
+        "<redacted-local-path>".to_string()
+    } else {
+        value.to_string()
+    }
+}
+
+fn redact_endpoint_url(value: &str) -> String {
+    let value = redact_url_userinfo(value);
+    [
+        "passphrase",
+        "password",
+        "stream_key",
+        "stream-key",
+        "streamkey",
+        "token",
+        "secret",
+        "authorization",
+        "auth",
+    ]
+    .into_iter()
+    .fold(value, |current, key| redact_query_value(&current, key))
+}
+
+fn redact_url_userinfo(input: &str) -> String {
+    let Some(scheme_end) = input.find("://") else {
+        return input.to_string();
+    };
+    let authority_start = scheme_end + 3;
+    let authority_end = input[authority_start..]
+        .find(['/', '?', '#'])
+        .map_or(input.len(), |relative| authority_start + relative);
+    let authority = &input[authority_start..authority_end];
+    let Some(userinfo_end) = authority.rfind('@') else {
+        return input.to_string();
+    };
+    let host_start = authority_start + userinfo_end + 1;
+    let mut output = String::with_capacity(input.len());
+    output.push_str(&input[..authority_start]);
+    output.push_str("<redacted-userinfo>@");
+    output.push_str(&input[host_start..]);
+    output
+}
+
+fn redact_query_value(input: &str, key: &str) -> String {
+    let lower = input.to_ascii_lowercase();
+    let marker = format!("{key}=");
+    let Some(start) = lower.find(&marker) else {
+        return input.to_string();
+    };
+    let value_start = start + marker.len();
+    let value_end = input[value_start..]
+        .find(['&', '#'])
+        .map_or(input.len(), |relative| value_start + relative);
+    let mut output = String::with_capacity(input.len());
+    output.push_str(&input[..value_start]);
+    output.push_str("<redacted>");
+    output.push_str(&input[value_end..]);
+    output
+}
+
+fn redact_command_args(args: &[String]) -> Vec<String> {
+    let mut redacted = Vec::with_capacity(args.len());
+    let mut redact_next = false;
+    for arg in args {
+        if redact_next {
+            redacted.push("<redacted>".to_string());
+            redact_next = false;
+            continue;
+        }
+        if sensitive_argument(arg) {
+            if arg.contains('=') {
+                redacted.push("<redacted>".to_string());
+            } else {
+                redacted.push(arg.clone());
+                redact_next = true;
+            }
+        } else {
+            redacted.push(arg.clone());
+        }
+    }
+    redacted
+}
+
+fn sensitive_argument(value: &str) -> bool {
+    let lowered = value.to_ascii_lowercase();
+    [
+        "passphrase",
+        "password",
+        "streamkey",
+        "stream_key",
+        "secret",
+        "token",
+        "authorization",
+        "api_key",
+        "private_key",
+    ]
+    .into_iter()
+    .any(|marker| lowered.contains(marker))
 }
 
 /// Validation severity for config readiness checks.
@@ -1218,6 +1348,59 @@ mod tests {
     fn redacted_config_never_exposes_password_value() {
         let redacted = AppConfig::default().redacted();
         assert_eq!(redacted.obs.password_value, "<redacted-env-value>");
+    }
+
+    #[test]
+    fn redacted_config_masks_relay_env_args_urls_and_paths() {
+        let mut config = AppConfig::default();
+        config.relay.mediamtx_api_url =
+            "http://127.0.0.1:9997/api?token=control-secret".to_string();
+        config.relay.mediamtx_metrics_url =
+            "http://operator:metrics-secret@127.0.0.1:9998/metrics?password=metrics-secret"
+                .to_string();
+        config.relay.processes[0].args = vec![
+            "--config".to_string(),
+            "/private/operator/config.yml".to_string(),
+            "--passphrase".to_string(),
+            "sensitive-passphrase".to_string(),
+        ];
+        config.relay.processes[0].env = vec![RelayEnvVar {
+            key: "OPENIRL_SRT_PASSPHRASE".to_string(),
+            value: "sensitive-env-value".to_string(),
+        }];
+        config.relay.processes[0].working_dir = Some("/private/operator".to_string());
+
+        let redacted = config.redacted();
+        let process = &redacted.relay.processes[0];
+        assert_eq!(process.env[0].value, "<redacted-env-value>");
+        assert_eq!(process.args[2], "--passphrase");
+        assert_eq!(process.args[3], "<redacted>");
+        assert_eq!(
+            process.working_dir.as_deref(),
+            Some("<redacted-local-path>")
+        );
+        assert_eq!(
+            redacted.relay.mediamtx_api_url,
+            "http://127.0.0.1:9997/api?token=<redacted>"
+        );
+        assert!(
+            !redacted
+                .relay
+                .mediamtx_metrics_url
+                .contains("metrics-secret")
+        );
+        assert!(
+            redacted
+                .relay
+                .mediamtx_metrics_url
+                .contains("<redacted-userinfo>@127.0.0.1:9998")
+        );
+
+        config.artifacts.support_bundles_dir = "/private/operator/support-bundles".to_string();
+        assert_eq!(
+            config.redacted().artifacts.support_bundles_dir,
+            "<redacted-local-path>"
+        );
     }
 
     #[test]

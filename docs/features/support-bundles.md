@@ -13,7 +13,10 @@ cargo run --package openirl-agent -- artifacts support-bundle --config config/op
 Expected evidence:
 
 - generated JSON contains redacted config and validation state
-- stream keys, SRT passphrases, dashboard tokens, OBS passwords, relay credentials, bearer tokens, and credential-bearing URLs are scrubbed
+- stream keys, SRT passphrases, dashboard tokens, OBS passwords, relay credentials, relay environment values, secret-bearing arguments, bearer tokens, credential-bearing URL queries and paths are scrubbed
+- IPv4 and IPv6 addresses are redacted according to policy, while loopback diagnostics remain available where useful
+- absolute local paths and generated artifact locations are scrubbed from structured support data
+- generated artifact directories and files use owner-only permissions where the host supports them
 - private IP redaction follows `support_bundle_redact_ips`
 - field-report markdown is scrubbed before export
 
@@ -35,3 +38,5 @@ Include:
 ## Current Boundary
 
 Automated redaction canaries prove known secret patterns. They do not replace human review when bundles include production timelines, location-adjacent details, screenshots, or unusual vendor logs.
+
+The redactor is intentionally conservative around process-bound media integrations: it handles paired command-line secret options, relay environment key/value objects, stream credentials embedded in URL paths, bracketed IPv6 authorities, and absolute artifact paths. New integrations should add a sanitized canary and a focused test before they are described as share-safe.

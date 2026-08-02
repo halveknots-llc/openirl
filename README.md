@@ -216,6 +216,7 @@ OpenIRL intentionally keeps media engines process-bound. Rust coordinates config
 | [Validation](docs/VALIDATION.md) | Authoritative source and runtime validation commands. |
 | [Maintainer checks](docs/MAINTAINER_CHECKS.md) | Release-claim rules and live dependency evidence checklist. |
 | [Release checklist](docs/RELEASE_CHECKLIST.md) | Package and live-environment gates for alpha releases. |
+| [Product roadmap](docs/ROADMAP.md) | Current source status, public milestones, and contributor priorities. |
 | [Security model](docs/SECURITY.md) | Local-first defaults, roles, public bind posture, and support-bundle guidance. |
 | [No-video troubleshooting](docs/troubleshooting/no-video.md) | First-response checks for missing contribution media. |
 
@@ -251,11 +252,15 @@ OpenIRL controls production software, so the default posture is conservative:
 
 - The agent binds to localhost unless LAN access is intentionally enabled.
 - CORS is same-origin by default; cross-origin dashboard clients must be listed explicitly.
+- Browser requests are checked against the request `Origin` and `Host`; an explicitly allowed cross-origin client still needs a dashboard token for control operations.
 - OBS WebSocket should always be password-protected.
 - Public bind without auth is rejected by config validation.
-- Dashboard tokens, stream keys, SRT passphrases, OBS passwords, and relay credentials are redacted from reports and support artifacts.
+- Dashboard tokens, stream keys, SRT passphrases, OBS passwords, relay environment values and arguments, credential-bearing URL paths, IP addresses, and local artifact paths are redacted from reports and support artifacts.
+- Generated support and diagnostic artifacts use owner-only file and directory permissions where the platform supports them.
 - Relay process execution is opt-in.
+- Bundled MediaMTX examples bind media listeners to loopback by default; LAN, VPN, and public relay exposure require an explicit private-network and authentication review.
 - Support bundles are designed for review before sharing.
+- Public beta packages are built from a clean Git archive and include the source revision used to assemble the package.
 
 Start with [config/openirl.example.toml](config/openirl.example.toml). Important defaults:
 

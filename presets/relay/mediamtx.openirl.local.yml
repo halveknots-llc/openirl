@@ -1,9 +1,11 @@
+# Local preset: keep media listeners on loopback. Add a private listener and
+# authentication policy separately when using a LAN or VPN relay.
 api: yes
 apiAddress: 127.0.0.1:9997
 metrics: yes
 metricsAddress: 127.0.0.1:9998
-srtAddress: :9000
-rtmpAddress: :1935
+srtAddress: 127.0.0.1:9000
+rtmpAddress: 127.0.0.1:1935
 paths:
   openirl-main:
     source: publisher

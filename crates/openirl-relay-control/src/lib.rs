@@ -9,7 +9,7 @@ use openirl_vault::redact_support_text;
 use serde::{Deserialize, Serialize};
 use std::{
     env,
-    ffi::OsString,
+    ffi::{OsStr, OsString},
     path::{Path, PathBuf},
     process::Stdio,
     sync::Arc,
@@ -17,12 +17,13 @@ use std::{
 use thiserror::Error;
 use time::OffsetDateTime;
 use tokio::{
-    io::{AsyncBufReadExt, BufReader},
+    io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, BufReader},
     process::{Child, Command},
     sync::Mutex,
 };
 
 const DEFAULT_LOG_LIMIT: usize = 200;
+const MAX_RELAY_LOG_LINE_BYTES: usize = 64 * 1024;
 
 /// Supported process-bound relay/media backends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -401,6 +402,20 @@ impl RelaySupervisor {
         })?;
 
         let mut command = Command::new(&executable);
+        command.env_clear();
+        for key in [
+            "PATH",
+            "HOME",
+            "USERPROFILE",
+            "TEMP",
+            "TMP",
+            "SYSTEMROOT",
+            "WINDIR",
+        ] {
+            if let Some(value) = env::var_os(key) {
+                command.env(key, value);
+            }
+        }
         command.args(&inner.config.args);
         if let Some(working_dir) = &inner.config.working_dir {
             command.current_dir(working_dir);
@@ -520,8 +535,14 @@ fn build_launch_plan(config: &RelayProcessConfig) -> RelayLaunchPlan {
         planned_protocols: config.backend.planned_protocols().to_vec(),
         executable,
         redacted_command,
-        metrics_url: config.metrics_url.clone(),
-        api_url: config.api_url.clone(),
+        metrics_url: config
+            .metrics_url
+            .as_deref()
+            .map(|url| redact_support_text(url, true)),
+        api_url: config
+            .api_url
+            .as_deref()
+            .map(|url| redact_support_text(url, true)),
     }
 }
 
@@ -544,8 +565,14 @@ fn build_runtime_status(
         started_at,
         last_exit,
         executable: build_executable_plan(config),
-        metrics_url: config.metrics_url.clone(),
-        api_url: config.api_url.clone(),
+        metrics_url: config
+            .metrics_url
+            .as_deref()
+            .map(|url| redact_support_text(url, true)),
+        api_url: config
+            .api_url
+            .as_deref()
+            .map(|url| redact_support_text(url, true)),
         recent_logs,
     }
 }
@@ -554,9 +581,9 @@ fn build_executable_plan(config: &RelayProcessConfig) -> RelayExecutablePlan {
     let candidates = config
         .executable_candidates()
         .into_iter()
-        .map(|candidate| candidate.to_string_lossy().to_string())
+        .map(|candidate| public_executable_name(&candidate))
         .collect::<Vec<_>>();
-    let resolved_path = resolve_executable(config).map(|path| path.to_string_lossy().to_string());
+    let resolved_path = resolve_executable(config).map(|path| public_executable_name(&path));
     RelayExecutablePlan {
         candidates,
         found: resolved_path.is_some(),
@@ -579,23 +606,59 @@ fn redacted_command(config: &RelayProcessConfig, resolved_path: Option<String>) 
             config.executable.clone()
         }
     });
-    command.push(executable);
-    command.extend(config.args.iter().map(|arg| redact_arg(arg)));
+    command.push(public_executable_name(Path::new(&executable)));
+    command.extend(redact_args(&config.args));
     command
 }
 
-fn redact_arg(value: &str) -> String {
-    let lowered = value.to_ascii_lowercase();
-    if lowered.contains("passphrase")
-        || lowered.contains("secret")
-        || lowered.contains("token")
-        || lowered.contains("streamkey")
-        || lowered.contains("stream_key")
-    {
-        "<redacted>".to_string()
-    } else {
-        value.to_string()
+fn public_executable_name(path: &Path) -> String {
+    path.file_name()
+        .and_then(OsStr::to_str)
+        .filter(|value| !value.is_empty())
+        .map_or_else(
+            || "<unresolved-relay-executable>".to_string(),
+            str::to_string,
+        )
+}
+
+fn redact_args(args: &[String]) -> Vec<String> {
+    let mut redacted = Vec::with_capacity(args.len());
+    let mut redact_next = false;
+    for arg in args {
+        if redact_next {
+            redacted.push("<redacted>".to_string());
+            redact_next = false;
+            continue;
+        }
+        if sensitive_argument(arg) {
+            if arg.contains('=') {
+                redacted.push("<redacted>".to_string());
+            } else {
+                redacted.push(arg.clone());
+                redact_next = true;
+            }
+        } else {
+            redacted.push(arg.clone());
+        }
     }
+    redacted
+}
+
+fn sensitive_argument(value: &str) -> bool {
+    let lowered = value.to_ascii_lowercase();
+    [
+        "passphrase",
+        "password",
+        "secret",
+        "token",
+        "streamkey",
+        "stream_key",
+        "authorization",
+        "api_key",
+        "private_key",
+    ]
+    .into_iter()
+    .any(|marker| lowered.contains(marker))
 }
 
 fn resolve_executable(config: &RelayProcessConfig) -> Option<PathBuf> {
@@ -650,12 +713,12 @@ fn spawn_log_reader<T>(
     limit: usize,
     redact_logs: bool,
 ) where
-    T: tokio::io::AsyncRead + Send + Unpin + 'static,
+    T: AsyncRead + Send + Unpin + 'static,
 {
     tokio::spawn(async move {
-        let mut lines = BufReader::new(reader).lines();
+        let mut reader = BufReader::new(reader);
         loop {
-            match lines.next_line().await {
+            match read_bounded_line(&mut reader, MAX_RELAY_LOG_LINE_BYTES).await {
                 Ok(Some(line)) => {
                     push_log_now(logs.clone(), stream, line, limit, redact_logs).await;
                 }
@@ -676,6 +739,47 @@ fn spawn_log_reader<T>(
     });
 }
 
+async fn read_bounded_line<R>(reader: &mut R, max_bytes: usize) -> std::io::Result<Option<String>>
+where
+    R: AsyncBufRead + Unpin,
+{
+    let mut bytes = Vec::with_capacity(max_bytes.min(4096));
+    let mut truncated = false;
+    loop {
+        let chunk = reader.fill_buf().await?;
+        if chunk.is_empty() {
+            if bytes.is_empty() {
+                return Ok(None);
+            }
+            break;
+        }
+
+        let newline_index = chunk.iter().position(|byte| *byte == b'\n');
+        let consume_len = newline_index.map_or(chunk.len(), |index| index + 1);
+        if bytes.len() < max_bytes {
+            let copy_len = consume_len.min(max_bytes - bytes.len());
+            bytes.extend_from_slice(&chunk[..copy_len]);
+            truncated |= copy_len < consume_len;
+        } else {
+            truncated = true;
+        }
+        reader.consume(consume_len);
+
+        if newline_index.is_some() {
+            break;
+        }
+    }
+
+    let mut line = String::from_utf8_lossy(&bytes).into_owned();
+    while line.ends_with('\r') || line.ends_with('\n') {
+        line.pop();
+    }
+    if truncated {
+        line = truncate_with_marker(line, max_bytes);
+    }
+    Ok(Some(line))
+}
+
 async fn push_log_now(
     logs: Arc<Mutex<Vec<RelayLogLine>>>,
     stream: &str,
@@ -688,6 +792,7 @@ async fn push_log_now(
     } else {
         line
     };
+    let line = cap_log_line(line, MAX_RELAY_LOG_LINE_BYTES);
     let mut logs = logs.lock().await;
     logs.push(RelayLogLine {
         at: OffsetDateTime::now_utc(),
@@ -699,6 +804,27 @@ async fn push_log_now(
         let excess = logs.len().saturating_sub(limit);
         logs.drain(0..excess);
     }
+}
+
+fn cap_log_line(line: String, max_bytes: usize) -> String {
+    if line.len() <= max_bytes {
+        return line;
+    }
+    truncate_with_marker(line, max_bytes)
+}
+
+fn truncate_with_marker(mut line: String, max_bytes: usize) -> String {
+    const SUFFIX: &str = " [truncated]";
+    if max_bytes <= SUFFIX.len() {
+        return SUFFIX[..max_bytes].to_string();
+    }
+    let mut end = max_bytes - SUFFIX.len();
+    while end > 0 && !line.is_char_boundary(end) {
+        end -= 1;
+    }
+    line.truncate(end);
+    line.push_str(SUFFIX);
+    line
 }
 
 #[cfg(test)]
@@ -723,9 +849,20 @@ mod tests {
 
     #[test]
     fn redaction_masks_secret_arguments() {
-        assert_eq!(redact_arg("--passphrase=abc"), "<redacted>");
-        assert_eq!(redact_arg("--token=abc"), "<redacted>");
-        assert_eq!(redact_arg("--port=9000"), "--port=9000");
+        assert_eq!(
+            redact_args(&[
+                "--passphrase".to_string(),
+                "abc".to_string(),
+                "--token=def".to_string(),
+                "--port=9000".to_string(),
+            ]),
+            vec![
+                "--passphrase".to_string(),
+                "<redacted>".to_string(),
+                "<redacted>".to_string(),
+                "--port=9000".to_string(),
+            ]
+        );
     }
 
     #[test]
@@ -752,5 +889,22 @@ mod tests {
         assert!(captured.contains("relay=<redacted-ip>"));
         assert!(!captured.contains("field-token"));
         assert!(!captured.contains("10.23.45.67"));
+    }
+
+    #[tokio::test]
+    async fn oversized_log_lines_are_bounded_before_retention()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let input = format!("{}\nnext\n", "x".repeat(MAX_RELAY_LOG_LINE_BYTES * 2));
+        let mut reader = BufReader::new(std::io::Cursor::new(input.into_bytes()));
+        let line = read_bounded_line(&mut reader, MAX_RELAY_LOG_LINE_BYTES)
+            .await?
+            .ok_or("first line missing")?;
+        assert!(line.len() <= MAX_RELAY_LOG_LINE_BYTES);
+        assert!(line.ends_with("[truncated]"));
+        let second_line = read_bounded_line(&mut reader, MAX_RELAY_LOG_LINE_BYTES)
+            .await?
+            .ok_or("second line missing")?;
+        assert_eq!(second_line, "next");
+        Ok(())
     }
 }

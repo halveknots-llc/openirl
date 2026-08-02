@@ -6,7 +6,7 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::sync::OnceLock;
+use std::{path::Path, sync::OnceLock};
 
 /// Local secret reference. This is not a full vault yet.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,7 +59,7 @@ pub fn redact_stream_url(input: &str) -> String {
     for key in sensitive {
         output = redact_query_key(&output, key);
     }
-    output
+    redact_stream_path(&output)
 }
 
 fn redact_query_key(input: &str, key: &str) -> String {
@@ -88,8 +88,14 @@ pub fn scrub_support_bundle_value(mut value: Value, redact_ips: bool) -> Value {
 fn scrub_json_value(value: &mut Value, redact_ips: bool) {
     match value {
         Value::Object(map) => {
+            let is_env_pair =
+                map.get("key").and_then(Value::as_str).is_some() && map.contains_key("value");
             for (key, child) in map {
-                if support_bundle_secret_key(key) {
+                if support_bundle_secret_key(key)
+                    || (is_env_pair && key == "value")
+                    || (support_bundle_path_key(key)
+                        && child.as_str().is_some_and(is_absolute_path))
+                {
                     *child = Value::String("<redacted>".to_string());
                 } else {
                     scrub_json_value(child, redact_ips);
@@ -128,12 +134,29 @@ fn support_bundle_secret_key(key: &str) -> bool {
         || key.contains("secret")
 }
 
+fn support_bundle_path_key(key: &str) -> bool {
+    let key = key.to_ascii_lowercase().replace('-', "_");
+    key == "path"
+        || key == "root_dir"
+        || key == "working_dir"
+        || key == "resolved_path"
+        || key.ends_with("_path")
+        || key.ends_with("_dir")
+}
+
+fn is_absolute_path(value: &str) -> bool {
+    Path::new(value).is_absolute()
+}
+
 static PRIVATE_KEY_RE: OnceLock<Option<Regex>> = OnceLock::new();
 static BEARER_RE: OnceLock<Option<Regex>> = OnceLock::new();
 static URL_USERINFO_RE: OnceLock<Option<Regex>> = OnceLock::new();
 static QUERY_SECRET_RE: OnceLock<Option<Regex>> = OnceLock::new();
 static ASSIGNMENT_SECRET_RE: OnceLock<Option<Regex>> = OnceLock::new();
+static RTMP_PATH_RE: OnceLock<Option<Regex>> = OnceLock::new();
+static SRT_PATH_RE: OnceLock<Option<Regex>> = OnceLock::new();
 static IPV4_RE: OnceLock<Option<Regex>> = OnceLock::new();
+static BRACKETED_IPV6_RE: OnceLock<Option<Regex>> = OnceLock::new();
 
 fn cached_regex(
     cell: &'static OnceLock<Option<Regex>>,
@@ -176,6 +199,7 @@ pub fn redact_support_text(input: &str, redact_ips: bool) -> String {
         r#"(?im)(?P<prefix>\b(?:password|passphrase|stream[_-]?key|secret|token|bearer[_-]?token|access[_-]?token|refresh[_-]?token|dashboard[_-]?token|obs[_-]?password)\b\s*[:=]\s*)["']?[^"',\n\r}]+["']?"#,
         "${prefix}<redacted>",
     );
+    redacted = redact_stream_path(&redacted);
 
     if redact_ips {
         redact_ip_addresses(&redacted)
@@ -198,15 +222,30 @@ fn replace_support_pattern(
 }
 
 fn redact_ip_addresses(input: &str) -> String {
+    let redacted_ipv6 =
+        if let Some(regex) = cached_regex(&BRACKETED_IPV6_RE, r"\[(?P<ip>[0-9A-Fa-f:]{2,})\]") {
+            regex
+                .replace_all(input, |captures: &regex::Captures<'_>| {
+                    let value = captures.name("ip").map_or("", |capture| capture.as_str());
+                    if value == "::1" || value.eq_ignore_ascii_case("0:0:0:0:0:0:0:1") {
+                        format!("[{value}]")
+                    } else {
+                        "<redacted-ipv6>".to_string()
+                    }
+                })
+                .into_owned()
+        } else {
+            input.to_string()
+        };
     let Some(regex) = cached_regex(
         &IPV4_RE,
         r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b",
     ) else {
-        return input.to_string();
+        return redacted_ipv6;
     };
 
     regex
-        .replace_all(input, |captures: &regex::Captures<'_>| {
+        .replace_all(&redacted_ipv6, |captures: &regex::Captures<'_>| {
             let value = captures.get(0).map_or("", |capture| capture.as_str());
             if value.starts_with("127.") || value == "0.0.0.0" {
                 value.to_string()
@@ -215,6 +254,21 @@ fn redact_ip_addresses(input: &str) -> String {
             }
         })
         .into_owned()
+}
+
+fn redact_stream_path(input: &str) -> String {
+    let output = replace_support_pattern(
+        input,
+        &RTMP_PATH_RE,
+        r"(?i)(?P<prefix>\b(?:rtmp|rtmps)://[^/\s?#]+/[^/\s?#]+/)[^/\s?#]+",
+        "${prefix}<redacted>",
+    );
+    replace_support_pattern(
+        &output,
+        &SRT_PATH_RE,
+        r"(?i)(?P<prefix>\b(?:srt|srtla)://[^/\s?#]+/)[^/\s?#]+",
+        "${prefix}<redacted>",
+    )
 }
 
 #[cfg(test)]
@@ -227,6 +281,13 @@ mod tests {
             redact_stream_url("srt://x:9000?streamid=main&passphrase=secret&latency=1800");
         assert!(redacted.contains("passphrase=<redacted>"));
         assert!(!redacted.contains("secret"));
+    }
+
+    #[test]
+    fn redacts_path_based_stream_credentials() {
+        let redacted = redact_stream_url("rtmp://relay.example/live/path-secret");
+        assert_eq!(redacted, "rtmp://relay.example/live/<redacted>");
+        assert!(!redacted.contains("path-secret"));
     }
 
     #[test]
@@ -261,6 +322,17 @@ mod tests {
     }
 
     #[test]
+    fn support_text_redacts_ipv6_and_path_credentials() {
+        let redacted = redact_support_text(
+            "rtmp://relay.example/live/path-secret [2001:db8::42] [::1]",
+            true,
+        );
+        assert!(!redacted.contains("path-secret"));
+        assert!(redacted.contains("<redacted-ipv6>"));
+        assert!(redacted.contains("[::1]"));
+    }
+
+    #[test]
     fn support_json_redacts_secret_keys_but_keeps_env_names() {
         let payload = serde_json::json!({
             "dashboard_token": "super-secret",
@@ -273,5 +345,26 @@ mod tests {
         assert_eq!(redacted["dashboard_token_env"], "OPENIRL_DASHBOARD_TOKEN");
         assert_eq!(redacted["note"], "OBS password = <redacted>");
         assert_eq!(redacted["host"], "<redacted-ip>");
+    }
+
+    #[test]
+    fn support_json_redacts_relay_environment_values() {
+        let payload = serde_json::json!({
+            "env": [{"key": "OPENIRL_SRT_PASSPHRASE", "value": "relay-secret"}]
+        });
+        let redacted = scrub_support_bundle_value(payload, false);
+        assert_eq!(redacted["env"][0]["key"], "OPENIRL_SRT_PASSPHRASE");
+        assert_eq!(redacted["env"][0]["value"], "<redacted>");
+    }
+
+    #[test]
+    fn support_json_redacts_absolute_artifact_paths() {
+        let payload = serde_json::json!({
+            "root_dir": "/private/operator/support-bundles/abc",
+            "relative_path": "artifacts/report.json"
+        });
+        let redacted = scrub_support_bundle_value(payload, false);
+        assert_eq!(redacted["root_dir"], "<redacted>");
+        assert_eq!(redacted["relative_path"], "artifacts/report.json");
     }
 }

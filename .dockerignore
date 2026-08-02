@@ -1,0 +1,17 @@
+.git
+.github
+.codex
+.env
+.env.*
+target
+dist
+artifacts
+openirl-support-bundles
+**/*.log
+**/*.pem
+**/*.key
+**/support-bundles
+**/field-reports
+**/logs
+**/secrets
+**/private
