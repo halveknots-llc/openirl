@@ -1,6 +1,7 @@
 //! TOML configuration for OpenIRL.
 
 use openirl_core::{DeploymentMode, SceneBundle, SceneNames};
+use openirl_vault::{redact_command_args, redact_url};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fs, net::SocketAddr, path::Path};
 use thiserror::Error;
@@ -58,7 +59,7 @@ impl AppConfig {
         let mut relay = self.relay.clone();
         redact_relay_config(&mut relay);
         let mut metrics = self.metrics.clone();
-        metrics.mediamtx_metrics_url = redact_endpoint_url(&metrics.mediamtx_metrics_url);
+        metrics.mediamtx_metrics_url = redact_url(&metrics.mediamtx_metrics_url);
         let mut artifacts = self.artifacts.clone();
         redact_artifact_config(&mut artifacts);
         RedactedAppConfig {
@@ -92,8 +93,8 @@ impl AppConfig {
 
 fn redact_relay_config(relay: &mut RelayConfig) {
     relay.mediamtx_config_path = redact_local_path(&relay.mediamtx_config_path);
-    relay.mediamtx_api_url = redact_endpoint_url(&relay.mediamtx_api_url);
-    relay.mediamtx_metrics_url = redact_endpoint_url(&relay.mediamtx_metrics_url);
+    relay.mediamtx_api_url = redact_url(&relay.mediamtx_api_url);
+    relay.mediamtx_metrics_url = redact_url(&relay.mediamtx_metrics_url);
     for process in &mut relay.processes {
         process.executable = redact_local_path(&process.executable);
         process.working_dir = process.working_dir.as_deref().map(redact_local_path);
@@ -118,100 +119,6 @@ fn redact_local_path(value: &str) -> String {
     } else {
         value.to_string()
     }
-}
-
-fn redact_endpoint_url(value: &str) -> String {
-    let value = redact_url_userinfo(value);
-    [
-        "passphrase",
-        "password",
-        "stream_key",
-        "stream-key",
-        "streamkey",
-        "token",
-        "secret",
-        "authorization",
-        "auth",
-    ]
-    .into_iter()
-    .fold(value, |current, key| redact_query_value(&current, key))
-}
-
-fn redact_url_userinfo(input: &str) -> String {
-    let Some(scheme_end) = input.find("://") else {
-        return input.to_string();
-    };
-    let authority_start = scheme_end + 3;
-    let authority_end = input[authority_start..]
-        .find(['/', '?', '#'])
-        .map_or(input.len(), |relative| authority_start + relative);
-    let authority = &input[authority_start..authority_end];
-    let Some(userinfo_end) = authority.rfind('@') else {
-        return input.to_string();
-    };
-    let host_start = authority_start + userinfo_end + 1;
-    let mut output = String::with_capacity(input.len());
-    output.push_str(&input[..authority_start]);
-    output.push_str("<redacted-userinfo>@");
-    output.push_str(&input[host_start..]);
-    output
-}
-
-fn redact_query_value(input: &str, key: &str) -> String {
-    let lower = input.to_ascii_lowercase();
-    let marker = format!("{key}=");
-    let Some(start) = lower.find(&marker) else {
-        return input.to_string();
-    };
-    let value_start = start + marker.len();
-    let value_end = input[value_start..]
-        .find(['&', '#'])
-        .map_or(input.len(), |relative| value_start + relative);
-    let mut output = String::with_capacity(input.len());
-    output.push_str(&input[..value_start]);
-    output.push_str("<redacted>");
-    output.push_str(&input[value_end..]);
-    output
-}
-
-fn redact_command_args(args: &[String]) -> Vec<String> {
-    let mut redacted = Vec::with_capacity(args.len());
-    let mut redact_next = false;
-    for arg in args {
-        if redact_next {
-            redacted.push("<redacted>".to_string());
-            redact_next = false;
-            continue;
-        }
-        if sensitive_argument(arg) {
-            if arg.contains('=') {
-                redacted.push("<redacted>".to_string());
-            } else {
-                redacted.push(arg.clone());
-                redact_next = true;
-            }
-        } else {
-            redacted.push(arg.clone());
-        }
-    }
-    redacted
-}
-
-fn sensitive_argument(value: &str) -> bool {
-    let lowered = value.to_ascii_lowercase();
-    [
-        "passphrase",
-        "password",
-        "streamkey",
-        "stream_key",
-        "secret",
-        "token",
-        "authorization",
-        "api_key",
-        "private_key",
-    ]
-    .into_iter()
-    .any(|marker| lowered.contains(marker))
 }
 
 /// Validation severity for config readiness checks.

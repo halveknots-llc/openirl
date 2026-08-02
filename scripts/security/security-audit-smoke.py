@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import http.client
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -55,6 +58,86 @@ def assert_public_bind_override_is_blocked() -> None:
         raise AssertionError("unsafe public bind override started successfully")
     if "refusing to start with unsafe config" not in combined:
         raise AssertionError(f"unsafe public bind failed for the wrong reason: {combined}")
+
+
+def request_status(port: int, host: str, origin: str | None = None) -> int:
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+    try:
+        connection.putrequest("POST", "/api/metrics/simulate/healthy", skip_host=True)
+        connection.putheader("Host", host)
+        if origin is not None:
+            connection.putheader("Origin", origin)
+        connection.putheader("Content-Length", "0")
+        connection.endheaders()
+        response = connection.getresponse()
+        response.read()
+        return response.status
+    finally:
+        connection.close()
+
+
+def assert_tokenless_localhost_rejects_untrusted_authority() -> None:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+
+    process = subprocess.Popen(
+        [
+            *CARGO,
+            "serve",
+            "--config",
+            str(CONFIG),
+            "--bind",
+            f"127.0.0.1:{port}",
+        ],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        deadline = time.monotonic() + 45
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                stdout, stderr = process.communicate()
+                raise AssertionError(f"local agent exited before security probe: {stdout}{stderr}")
+            try:
+                connection = http.client.HTTPConnection("127.0.0.1", port, timeout=1)
+                connection.request("GET", "/health")
+                response = connection.getresponse()
+                response.read()
+                connection.close()
+                if response.status == 200:
+                    break
+            except OSError:
+                time.sleep(0.1)
+        else:
+            raise AssertionError("local agent did not become ready for security probe")
+
+        untrusted = request_status(
+            port,
+            f"untrusted.example:{port}",
+            f"http://untrusted.example:{port}",
+        )
+        if untrusted not in (401, 403):
+            raise AssertionError(
+                f"untrusted local authority bypassed token enforcement with HTTP {untrusted}"
+            )
+
+        trusted = request_status(
+            port,
+            f"127.0.0.1:{port}",
+            f"http://127.0.0.1:{port}",
+        )
+        if trusted != 200:
+            raise AssertionError(f"trusted loopback demo request returned HTTP {trusted}")
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
 
 
 def support_bundle_config(tmp: Path) -> Path:
@@ -121,6 +204,7 @@ def main() -> int:
 
     assert_default_config_validates()
     assert_public_bind_override_is_blocked()
+    assert_tokenless_localhost_rejects_untrusted_authority()
     assert_support_bundle_redacts_canaries()
     print("security audit smoke passed")
     return 0

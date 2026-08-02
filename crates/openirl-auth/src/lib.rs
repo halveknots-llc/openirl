@@ -1,6 +1,8 @@
 //! Dashboard authentication primitives for the local-first control plane.
 
+use http::{Uri, uri::Authority};
 use serde::{Deserialize, Serialize};
+use std::net::{IpAddr, SocketAddr};
 use thiserror::Error;
 
 /// Policy snapshot used by the agent and dashboard.
@@ -155,10 +157,29 @@ pub fn browser_origin_is_same_origin(origin: Option<&str>, host: Option<&str>) -
     let Some(host) = host.map(str::trim).filter(|value| !value.is_empty()) else {
         return false;
     };
-    let Some(authority) = origin_authority(origin) else {
+    if origin.eq_ignore_ascii_case("null") {
+        return false;
+    }
+    let Ok(uri) = origin.parse::<Uri>() else {
         return false;
     };
-    !authority.contains('@') && authority.eq_ignore_ascii_case(host)
+    let Some(scheme) = uri.scheme_str() else {
+        return false;
+    };
+    if !matches!(scheme, "http" | "https")
+        || uri
+            .path_and_query()
+            .is_some_and(|value| value.as_str() != "/")
+    {
+        return false;
+    }
+    let Some(origin_authority) = uri.authority() else {
+        return false;
+    };
+    let Ok(host_authority) = host.parse::<Authority>() else {
+        return false;
+    };
+    authorities_match(origin_authority, &host_authority, scheme)
 }
 
 /// Returns whether a browser origin is same-origin or explicitly configured.
@@ -182,20 +203,75 @@ pub fn browser_origin_is_allowed(
         .any(|allowed| allowed.trim().eq_ignore_ascii_case(origin))
 }
 
-fn origin_authority(origin: &str) -> Option<&str> {
-    let authority = origin
-        .strip_prefix("http://")
-        .or_else(|| origin.strip_prefix("https://"))?
-        .split('/')
-        .next()?;
-    if authority.is_empty()
-        || authority
-            .chars()
-            .any(|character| matches!(character, '?' | '#' | '\\'))
-    {
-        return None;
+/// Returns whether a request authority is the configured direct loopback listener.
+///
+/// This is deliberately stricter than same-origin comparison. Browser-controlled
+/// `Host` and `Origin` values may agree while naming an untrusted DNS host, so
+/// tokenless access must also be anchored to the listener address.
+#[must_use]
+pub fn browser_request_is_trusted_local(
+    origin: Option<&str>,
+    host: Option<&str>,
+    bind: SocketAddr,
+) -> bool {
+    if !request_host_is_trusted_local(host, bind) {
+        return false;
     }
-    Some(authority)
+    let Some(origin) = origin.map(str::trim).filter(|value| !value.is_empty()) else {
+        return true;
+    };
+    let Ok(uri) = origin.parse::<Uri>() else {
+        return false;
+    };
+    uri.scheme_str() == Some("http") && browser_origin_is_same_origin(Some(origin), host)
+}
+
+/// Returns whether the Host authority names the configured loopback listener.
+#[must_use]
+pub fn request_host_is_trusted_local(host: Option<&str>, bind: SocketAddr) -> bool {
+    if !bind.ip().is_loopback() {
+        return false;
+    }
+    let Some(host) = host.map(str::trim).filter(|value| !value.is_empty()) else {
+        return false;
+    };
+    let Ok(authority) = host.parse::<Authority>() else {
+        return false;
+    };
+    if authority.as_str().contains('@') {
+        return false;
+    }
+    let port_matches = authority
+        .port_u16()
+        .map_or(bind.port() == 80, |port| port == bind.port());
+    port_matches && local_hostname(authority.host())
+}
+
+fn authorities_match(origin: &Authority, host: &Authority, scheme: &str) -> bool {
+    if origin.as_str().contains('@') || host.as_str().contains('@') {
+        return false;
+    }
+    origin.host().eq_ignore_ascii_case(host.host())
+        && effective_port(origin, scheme) == effective_port(host, scheme)
+}
+
+fn effective_port(authority: &Authority, scheme: &str) -> Option<u16> {
+    authority.port_u16().or(match scheme {
+        "http" => Some(80),
+        "https" => Some(443),
+        _ => None,
+    })
+}
+
+fn local_hostname(host: &str) -> bool {
+    let normalized = host
+        .trim_matches(['[', ']'])
+        .strip_suffix('.')
+        .unwrap_or_else(|| host.trim_matches(['[', ']']));
+    normalized.eq_ignore_ascii_case("localhost")
+        || normalized
+            .parse::<IpAddr>()
+            .is_ok_and(|address| address.is_loopback())
 }
 
 fn allow(reason: &str) -> AuthDecision {
@@ -285,6 +361,47 @@ mod tests {
             Some("https://example.test"),
             Some("127.0.0.1:7707")
         ));
+        assert!(browser_origin_is_same_origin(
+            Some("http://localhost"),
+            Some("localhost:80")
+        ));
+    }
+
+    #[test]
+    fn tokenless_local_origin_must_name_configured_listener() -> Result<(), std::net::AddrParseError>
+    {
+        let bind = "127.0.0.1:7707".parse()?;
+        assert!(browser_request_is_trusted_local(
+            Some("http://localhost:7707"),
+            Some("localhost:7707"),
+            bind
+        ));
+        assert!(browser_request_is_trusted_local(
+            Some("http://127.0.0.1:7707"),
+            Some("127.0.0.1:7707"),
+            bind
+        ));
+        assert!(!browser_request_is_trusted_local(
+            Some("http://untrusted.example:7707"),
+            Some("untrusted.example:7707"),
+            bind
+        ));
+        assert!(!browser_request_is_trusted_local(
+            Some("https://localhost:7707"),
+            Some("localhost:7707"),
+            bind
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn public_listener_never_qualifies_for_tokenless_host() -> Result<(), std::net::AddrParseError>
+    {
+        assert!(!request_host_is_trusted_local(
+            Some("localhost:7707"),
+            "0.0.0.0:7707".parse()?
+        ));
+        Ok(())
     }
 
     #[test]

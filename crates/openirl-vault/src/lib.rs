@@ -1,6 +1,7 @@
 //! Secret redaction and future local vault utilities.
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use percent_encoding::percent_decode_str;
 use regex::Regex;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
@@ -54,28 +55,109 @@ pub fn redact_value(value: &str) -> String {
 /// Redacts stream-key-like query params from an ingest URL.
 #[must_use]
 pub fn redact_stream_url(input: &str) -> String {
-    let sensitive = ["passphrase", "stream_key", "key", "token", "password"];
-    let mut output = input.to_string();
-    for key in sensitive {
-        output = redact_query_key(&output, key);
-    }
-    redact_stream_path(&output)
+    redact_stream_path(&redact_url(input))
 }
 
-fn redact_query_key(input: &str, key: &str) -> String {
-    let pattern = format!("{key}=");
-    let Some(start) = input.find(&pattern) else {
+/// Redacts URL userinfo and every sensitive query value while preserving shape.
+#[must_use]
+pub fn redact_url(input: &str) -> String {
+    let without_userinfo = redact_url_userinfo(input);
+    let (before_fragment, fragment) = without_userinfo
+        .split_once('#')
+        .map_or((without_userinfo.as_str(), None), |(before, fragment)| {
+            (before, Some(fragment))
+        });
+    let Some((base, query)) = before_fragment.split_once('?') else {
+        return without_userinfo;
+    };
+    let redacted_query = query
+        .split('&')
+        .map(redact_query_pair)
+        .collect::<Vec<_>>()
+        .join("&");
+    let mut output = format!("{base}?{redacted_query}");
+    if let Some(fragment) = fragment {
+        output.push('#');
+        output.push_str(fragment);
+    }
+    output
+}
+
+/// Redacts values supplied through sensitive command-line arguments.
+#[must_use]
+pub fn redact_command_args(args: &[String]) -> Vec<String> {
+    let mut redacted = Vec::with_capacity(args.len());
+    let mut redact_next = false;
+    for arg in args {
+        if redact_next {
+            redacted.push("<redacted>".to_string());
+            redact_next = false;
+            continue;
+        }
+
+        if let Some((name, _value)) = arg.split_once('=') {
+            if sensitive_name(name.trim_start_matches('-')) {
+                redacted.push(format!("{name}=<redacted>"));
+                continue;
+            }
+        } else if arg.starts_with('-') && sensitive_name(arg.trim_start_matches('-')) {
+            redacted.push(arg.clone());
+            redact_next = true;
+            continue;
+        }
+
+        redacted.push(redact_stream_url(arg));
+    }
+    redacted
+}
+
+fn redact_url_userinfo(input: &str) -> String {
+    let Some(scheme_end) = input.find("://") else {
         return input.to_string();
     };
-    let value_start = start + pattern.len();
-    let value_end = input[value_start..]
-        .find('&')
-        .map_or(input.len(), |relative| value_start + relative);
+    let authority_start = scheme_end + 3;
+    let authority_end = input[authority_start..]
+        .find(['/', '?', '#'])
+        .map_or(input.len(), |relative| authority_start + relative);
+    let authority = &input[authority_start..authority_end];
+    let Some(userinfo_end) = authority.rfind('@') else {
+        return input.to_string();
+    };
+    let host_start = authority_start + userinfo_end + 1;
     let mut output = String::with_capacity(input.len());
-    output.push_str(&input[..value_start]);
-    output.push_str("<redacted>");
-    output.push_str(&input[value_end..]);
+    output.push_str(&input[..authority_start]);
+    output.push_str("<redacted-userinfo>@");
+    output.push_str(&input[host_start..]);
     output
+}
+
+fn redact_query_pair(pair: &str) -> String {
+    let Some((key, _value)) = pair.split_once('=') else {
+        return pair.to_string();
+    };
+    if sensitive_name(&percent_decode_str(key).decode_utf8_lossy()) {
+        format!("{key}=<redacted>")
+    } else {
+        pair.to_string()
+    }
+}
+
+fn sensitive_name(value: &str) -> bool {
+    let normalized = value.trim().to_ascii_lowercase().replace(['-', '.'], "_");
+    if normalized.ends_with("_env") || normalized.contains("without_token") {
+        return false;
+    }
+    let compact = normalized.replace('_', "");
+    matches!(
+        normalized.as_str(),
+        "auth" | "authorization" | "key" | "secret" | "signature" | "token"
+    ) || normalized.contains("password")
+        || normalized.contains("passphrase")
+        || normalized.ends_with("_secret")
+        || normalized.ends_with("_token")
+        || compact.contains("streamkey")
+        || compact.contains("apikey")
+        || compact.contains("privatekey")
 }
 
 /// Redacts a support-bundle JSON payload without changing non-sensitive shape.
@@ -281,6 +363,41 @@ mod tests {
             redact_stream_url("srt://x:9000?streamid=main&passphrase=secret&latency=1800");
         assert!(redacted.contains("passphrase=<redacted>"));
         assert!(!redacted.contains("secret"));
+    }
+
+    #[test]
+    fn redacts_every_duplicate_and_encoded_query_secret() {
+        let redacted = redact_url(
+            "http://operator:password@localhost:9998/metrics?token=first&%74oken=second&safe=value#summary",
+        );
+        assert_eq!(
+            redacted,
+            "http://<redacted-userinfo>@localhost:9998/metrics?token=<redacted>&%74oken=<redacted>&safe=value#summary"
+        );
+        assert!(!redacted.contains("first"));
+        assert!(!redacted.contains("second"));
+        assert!(!redacted.contains("password"));
+    }
+
+    #[test]
+    fn command_arguments_normalize_hyphenated_secret_names() {
+        let args = vec![
+            "--stream-key=alpha".to_string(),
+            "--api-key".to_string(),
+            "bravo".to_string(),
+            "--endpoint=srt://localhost:9000?token=charlie".to_string(),
+            "--port=9000".to_string(),
+        ];
+        assert_eq!(
+            redact_command_args(&args),
+            vec![
+                "--stream-key=<redacted>".to_string(),
+                "--api-key".to_string(),
+                "<redacted>".to_string(),
+                "--endpoint=srt://localhost:9000?token=<redacted>".to_string(),
+                "--port=9000".to_string(),
+            ]
+        );
     }
 
     #[test]
