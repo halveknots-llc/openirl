@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Static validation for the OpenIRL source repository."""
 from __future__ import annotations
-import json, re, sys, tomllib
+import json, re, tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Strict source-readiness audit for OpenIRL."""
 from __future__ import annotations
-import json, re, shutil, sys, tomllib
+import json, re, shutil, tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
