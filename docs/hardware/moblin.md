@@ -27,3 +27,7 @@ Replace `127.0.0.1` with the OBS or relay host address reachable from the phone.
 ## Evidence
 
 Record the Moblin version, iOS version, protocol, endpoint host class, and whether the generated profile was accepted. A public field report should remove passphrases, stream IDs that identify a private production setup, and location-adjacent notes.
+
+Submit a reviewed result against the `moblin-profile` row using the
+[compatibility evidence process](../COMPATIBILITY.md). Profile generation alone
+remains source evidence until a real Moblin version and iOS host are recorded.

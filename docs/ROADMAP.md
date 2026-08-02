@@ -13,6 +13,7 @@ The repository currently includes:
 - localhost-first binding, explicit LAN/auth validation, browser-origin checks, structured redaction, bounded process and HTTP reads, and owner-restricted generated artifacts
 - source-level validation, security checks, dependency policy, release scripts, live-smoke entry points, and public contributor documentation
 - a deterministic local demo and scoped readiness report that keep source, local-runtime, and live-environment evidence separate
+- a machine-validated compatibility matrix that pins every row to an exact source revision and evidence maturity
 
 Automated source validation is not live field proof. OBS, MediaMTX, mobile encoder, BELABOX, SRTLA, tunnel, WebRTC, and Windows packaging claims remain environment-specific until the matching smoke checks run with the real dependency.
 
@@ -28,7 +29,7 @@ Automated source validation is not live field proof. OBS, MediaMTX, mobile encod
 
 ### 2. Field reliability
 
-- Build a repeatable matrix for OBS, MediaMTX, Moblin, IRL Pro, Larix, BELABOX, and common SRT/SRTLA paths.
+- Maintain the repeatable compatibility matrix for OBS, MediaMTX, Moblin, IRL Pro, Larix, BELABOX, and common SRT/SRTLA paths as reviewed field results arrive.
 - Exercise brownout detection, backup ingest, scene fallback, recovery, and operator-visible explanations under degraded network conditions.
 - Add bounded telemetry and diagnostic counters that help operators answer "what failed, when, and what did OpenIRL do?" without collecting stream content by default.
 - Record host, dependency, configuration class, and artifact evidence for every live result.

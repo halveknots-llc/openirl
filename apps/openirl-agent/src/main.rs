@@ -38,8 +38,9 @@ use openirl_core::{
 use openirl_desktop_shell::default_desktop_shell_plan;
 use openirl_diagnostics::SupportBundleManifest;
 use openirl_field_validation::{
-    FieldEvidenceInput, build_device_checklists, build_field_validation_plan,
-    evaluate_field_evidence, sample_field_evidence,
+    CompatibilityMatrix, FieldEvidenceInput, build_compatibility_matrix, build_device_checklists,
+    build_field_validation_plan, evaluate_field_evidence, sample_field_evidence,
+    validate_compatibility_matrix,
 };
 use openirl_health::HealthEngine;
 use openirl_installer::{InstallPlanRequest, build_install_plan, default_windows_service_plan};
@@ -220,6 +221,21 @@ enum Command {
     },
     /// Print the feature areas real mobile field validation plan.
     FieldPlan,
+    /// Print a versioned compatibility matrix for an exact source revision.
+    CompatibilityMatrix {
+        /// Full Git commit used for the evidence rows.
+        #[arg(long)]
+        revision: String,
+        /// Evidence review date in YYYY-MM-DD form.
+        #[arg(long)]
+        reviewed_on: String,
+    },
+    /// Validate a checked-in compatibility matrix.
+    CompatibilityValidate {
+        /// Matrix JSON file.
+        #[arg(long)]
+        file: PathBuf,
+    },
     /// Print an editable feature areas field evidence JSON payload.
     FieldSampleEvidence,
     /// Evaluate feature areas real mobile field evidence flags.
@@ -749,6 +765,38 @@ async fn main() -> anyhow::Result<()> {
                     "device_checklists": build_device_checklists()
                 }))?
             );
+            Ok(())
+        }
+        Command::CompatibilityMatrix {
+            revision,
+            reviewed_on,
+        } => {
+            let matrix = build_compatibility_matrix(OPENIRL_SCHEMA_REVISION, revision, reviewed_on);
+            let validation = validate_compatibility_matrix(&matrix);
+            if !validation.ok {
+                bail!(
+                    "refusing to emit invalid compatibility matrix: {}",
+                    validation.errors.join("; ")
+                );
+            }
+            println!("{}", serde_json::to_string_pretty(&matrix)?);
+            Ok(())
+        }
+        Command::CompatibilityValidate { file } => {
+            let raw = std::fs::read_to_string(&file).with_context(|| {
+                format!("failed to read compatibility matrix at {}", file.display())
+            })?;
+            let matrix: CompatibilityMatrix = serde_json::from_str(&raw).with_context(|| {
+                format!(
+                    "failed to decode compatibility matrix at {}",
+                    file.display()
+                )
+            })?;
+            let validation = validate_compatibility_matrix(&matrix);
+            println!("{}", serde_json::to_string_pretty(&validation)?);
+            if !validation.ok {
+                bail!("compatibility matrix validation failed");
+            }
             Ok(())
         }
         Command::FieldSampleEvidence => {

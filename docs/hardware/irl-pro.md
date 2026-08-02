@@ -27,3 +27,7 @@ Use the address reachable from the Android device. For field use, prefer environ
 ## Evidence
 
 Record IRL Pro version, Android version, protocol, endpoint host class, accepted profile fields, and whether OpenIRL metrics saw the contribution path. Remove secrets before attaching logs or screenshots.
+
+Submit a reviewed result against the `irl-pro-profile` row using the
+[compatibility evidence process](../COMPATIBILITY.md). Profile generation alone
+does not establish Android import or contribution compatibility.

@@ -892,7 +892,10 @@ name = "openirl-field-validation"
 version = "0.1.0-alpha.0"
 dependencies = [
  "openirl-core",
+ "openirl-readiness",
+ "openirl-vault",
  "serde",
+ "serde_json",
  "time",
 ]
 
@@ -1060,6 +1063,7 @@ version = "0.1.0-alpha.0"
 dependencies = [
  "openirl-config",
  "openirl-core",
+ "openirl-readiness",
  "serde",
  "serde_json",
  "thiserror",

@@ -6,8 +6,11 @@
 //! a live phone, backpack, MediaMTX process, or OBS instance.
 
 use openirl_core::{EncoderKind, HealthState, Protocol, SceneRole};
+use openirl_readiness::EvidenceMaturity;
+use openirl_vault::redact_support_text;
 use serde::{Deserialize, Serialize};
-use time::OffsetDateTime;
+use std::{collections::BTreeSet, path::Path};
+use time::{Date, Month, OffsetDateTime};
 
 /// Field-validation stage.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
@@ -72,6 +75,75 @@ pub enum FieldStatus {
     Blocked,
     /// Failed.
     Failed,
+}
+
+/// Result recorded at the declared evidence maturity.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CompatibilityResult {
+    /// The named environment or dependency has not run.
+    NotRun,
+    /// The declared evidence maturity passed.
+    Passed,
+    /// The declared evidence maturity failed.
+    Failed,
+    /// A named prerequisite prevented the check from running.
+    Blocked,
+}
+
+/// One versioned compatibility evidence row.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct CompatibilityRow {
+    /// Stable row identifier.
+    pub id: String,
+    /// Operator workflow family.
+    pub workflow: String,
+    /// Named dependency, device, or platform.
+    pub dependency: String,
+    /// Exact dependency version, or `not-recorded` before real integration evidence exists.
+    pub dependency_version: String,
+    /// Host platform and version, or `not-recorded` before real integration evidence exists.
+    pub host_platform: String,
+    /// Exact OpenIRL commit used for this evidence.
+    pub openirl_revision: String,
+    /// Non-secret configuration class.
+    pub configuration_class: String,
+    /// Reproducible smoke command or script.
+    pub smoke_script: String,
+    /// Highest established maturity.
+    pub maturity: EvidenceMaturity,
+    /// Result at that maturity.
+    pub result: CompatibilityResult,
+    /// Public-safe artifact, test, or report reference.
+    pub artifact_reference: String,
+    /// Concise interpretation boundary.
+    pub notes: String,
+}
+
+/// Versioned compatibility matrix.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct CompatibilityMatrix {
+    /// Matrix schema revision.
+    pub matrix_revision: u16,
+    /// OpenIRL API schema revision.
+    pub schema_revision: u16,
+    /// Exact source revision shared by every row.
+    pub source_revision: String,
+    /// Calendar date of the evidence review.
+    pub reviewed_on: String,
+    /// Compatibility evidence rows.
+    pub rows: Vec<CompatibilityRow>,
+    /// Public evidence handling rules.
+    pub evidence_policy: Vec<String>,
+}
+
+/// Semantic validation result for a compatibility matrix.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct CompatibilityValidationReport {
+    /// True when no validation error was found.
+    pub ok: bool,
+    /// Public-safe validation errors.
+    pub errors: Vec<String>,
 }
 
 /// One mobile field alpha validation check.
@@ -222,6 +294,351 @@ pub struct FieldEvidenceReport {
     pub next_actions: Vec<String>,
     /// Concise status summary.
     pub summary: String,
+}
+
+/// Builds the versioned source and field compatibility baseline.
+#[must_use]
+pub fn build_compatibility_matrix(
+    schema_revision: u16,
+    source_revision: impl Into<String>,
+    reviewed_on: impl Into<String>,
+) -> CompatibilityMatrix {
+    let source_revision = source_revision.into();
+    let reviewed_on = reviewed_on.into();
+    macro_rules! row {
+        ($id:expr, $workflow:expr, $dependency:expr, $dependency_version:expr,
+         $host:expr, $class:expr, $smoke:expr, $maturity:expr, $result:expr,
+         $artifact:expr, $notes:expr) => {
+            CompatibilityRow {
+                id: $id.to_string(),
+                workflow: $workflow.to_string(),
+                dependency: $dependency.to_string(),
+                dependency_version: $dependency_version.to_string(),
+                host_platform: $host.to_string(),
+                openirl_revision: source_revision.clone(),
+                configuration_class: $class.to_string(),
+                smoke_script: $smoke.to_string(),
+                maturity: $maturity,
+                result: $result,
+                artifact_reference: $artifact.to_string(),
+                notes: $notes.to_string(),
+            }
+        };
+    }
+
+    CompatibilityMatrix {
+        matrix_revision: 1,
+        schema_revision,
+        source_revision: source_revision.clone(),
+        reviewed_on,
+        rows: vec![
+            row!(
+                "obs-websocket-v5",
+                "OBS scene and output control",
+                "OBS Studio",
+                "not-recorded",
+                "not-recorded",
+                "obs-websocket-v5-source-contract",
+                "scripts/obs/reconcile-smoke.sh or .ps1",
+                EvidenceMaturity::SourceValidated,
+                CompatibilityResult::Passed,
+                "crates/openirl-obs/src/lib.rs",
+                "Typed WebSocket requests and source tests passed; no real OBS version is claimed."
+            ),
+            row!(
+                "mediamtx-srt-ingest",
+                "SRT contribution through MediaMTX",
+                "MediaMTX",
+                "not-recorded",
+                "not-recorded",
+                "loopback-srt-listener-source-contract",
+                "scripts/ingest/local-ingest-smoke.sh or .ps1",
+                EvidenceMaturity::SourceValidated,
+                CompatibilityResult::Passed,
+                "deploy/mediamtx/openirl.mediamtx.yml",
+                "Loopback configuration and metrics parsing passed source checks; no media process ran."
+            ),
+            row!(
+                "mediamtx-rtmp-ingest",
+                "RTMP contribution through MediaMTX",
+                "MediaMTX",
+                "not-recorded",
+                "not-recorded",
+                "loopback-rtmp-listener-plan",
+                "scripts/ingest/local-ingest-smoke.sh or .ps1",
+                EvidenceMaturity::Modeled,
+                CompatibilityResult::NotRun,
+                "not-run",
+                "The RTMP path is configured but has no source or live evidence row yet."
+            ),
+            row!(
+                "moblin-profile",
+                "Moblin contribution profile",
+                "Moblin",
+                "not-recorded",
+                "not-recorded",
+                "moblin-srt-srtla-profile-contract",
+                "scripts/mobile/profile-compat-smoke.sh or .ps1",
+                EvidenceMaturity::SourceValidated,
+                CompatibilityResult::Passed,
+                "presets/encoders/moblin-srt.json",
+                "Profile generation and redaction passed; no iOS import or stream is claimed."
+            ),
+            row!(
+                "irl-pro-profile",
+                "IRL Pro contribution profile",
+                "IRL Pro",
+                "not-recorded",
+                "not-recorded",
+                "irl-pro-srt-srtla-profile-contract",
+                "scripts/mobile/profile-compat-smoke.sh or .ps1",
+                EvidenceMaturity::SourceValidated,
+                CompatibilityResult::Passed,
+                "presets/encoders/irl-pro-srt.json",
+                "Profile generation and redaction passed; no Android import or stream is claimed."
+            ),
+            row!(
+                "larix-profile",
+                "Larix contribution profile",
+                "Larix Broadcaster",
+                "not-recorded",
+                "not-recorded",
+                "larix-srt-profile-contract",
+                "scripts/mobile/profile-compat-smoke.sh or .ps1",
+                EvidenceMaturity::SourceValidated,
+                CompatibilityResult::Passed,
+                "presets/encoders/larix-srt.json",
+                "Profile generation passed; no device import or contribution is claimed."
+            ),
+            row!(
+                "belabox-profile",
+                "BELABOX-oriented bonded contribution profile",
+                "BELABOX",
+                "not-recorded",
+                "not-recorded",
+                "belabox-srtla2-profile-contract",
+                "scripts/mobile/profile-compat-smoke.sh or .ps1",
+                EvidenceMaturity::SourceValidated,
+                CompatibilityResult::Passed,
+                "presets/encoders/belabox-srtla2.json",
+                "Profile generation passed; no BELABOX hardware or service was contacted."
+            ),
+            row!(
+                "srtla-process-path",
+                "Process-bound SRTLA relay path",
+                "SRTLA-compatible tools",
+                "not-recorded",
+                "not-recorded",
+                "process-supervision-source-contract",
+                "scripts/relay/srtla2-compat-smoke.sh",
+                EvidenceMaturity::SourceValidated,
+                CompatibilityResult::Passed,
+                "crates/openirl-relay-control/src/lib.rs",
+                "Bounded process planning and redaction passed; no SRTLA binary ran."
+            ),
+            row!(
+                "brownout-health",
+                "Brownout detection and fallback recommendation",
+                "OpenIRL health engine",
+                "0.1.0-alpha.0",
+                "deterministic-local-runtime",
+                "fixed-health-scenario-v1",
+                "python3 scripts/smoke/demo-mode-smoke.py",
+                EvidenceMaturity::LocalRuntimeValidated,
+                CompatibilityResult::Passed,
+                "fixtures/metrics/brownout-v2-scenarios.json",
+                "Deterministic local metrics exercised health decisions without contribution media."
+            ),
+            row!(
+                "backup-ingest",
+                "Primary-to-backup ingest selection",
+                "OBS and MediaMTX",
+                "not-recorded",
+                "not-recorded",
+                "backup-ingest-source-contract",
+                "scripts/ingest/backup-failover-smoke.sh",
+                EvidenceMaturity::SourceValidated,
+                CompatibilityResult::Passed,
+                "presets/obs/backup-ingest-policy.json",
+                "Policy and scene-selection source checks passed; no dual ingest environment ran."
+            ),
+            row!(
+                "recovery-hysteresis",
+                "Brownout recovery and scene stabilization",
+                "OpenIRL health engine",
+                "0.1.0-alpha.0",
+                "deterministic-local-runtime",
+                "fixed-health-scenario-v1",
+                "cargo test --package openirl-health",
+                EvidenceMaturity::LocalRuntimeValidated,
+                CompatibilityResult::Passed,
+                "crates/openirl-health/src/lib.rs",
+                "Recovery hysteresis passed deterministic tests; no real network recovery is claimed."
+            ),
+            row!(
+                "windows-portable-alpha",
+                "Windows portable package and first launch",
+                "Windows",
+                "not-recorded",
+                "not-recorded",
+                "windows-portable-release",
+                "scripts/windows/build-alpha-portable.ps1",
+                EvidenceMaturity::Modeled,
+                CompatibilityResult::NotRun,
+                "not-run",
+                "A real Windows runner must build and verify the package before this row advances."
+            ),
+        ],
+        evidence_policy: vec![
+            "Record exact host, dependency, and OpenIRL versions for integration or field evidence."
+                .to_string(),
+            "Use only sanitized fixtures and reviewed artifact references in the public matrix."
+                .to_string(),
+            "Never attach stream credentials, private network details, raw support bundles, or location-sensitive media."
+                .to_string(),
+            "Source and deterministic local results never imply integration, field, or release maturity."
+                .to_string(),
+        ],
+    }
+}
+
+/// Validates matrix structure, evidence maturity, and public-safe references.
+#[must_use]
+pub fn validate_compatibility_matrix(
+    matrix: &CompatibilityMatrix,
+) -> CompatibilityValidationReport {
+    let mut errors = Vec::new();
+    if matrix.matrix_revision == 0 {
+        errors.push("matrix_revision must be greater than zero".to_string());
+    }
+    if !is_git_revision(&matrix.source_revision) {
+        errors.push("source_revision must be a full 40-character Git commit".to_string());
+    }
+    if !looks_like_date(&matrix.reviewed_on) {
+        errors.push("reviewed_on must use YYYY-MM-DD format".to_string());
+    }
+    if matrix.rows.is_empty() {
+        errors.push("matrix must contain at least one compatibility row".to_string());
+    }
+    if matrix.evidence_policy.is_empty() {
+        errors.push("evidence_policy must contain public handling rules".to_string());
+    }
+    for policy in &matrix.evidence_policy {
+        if policy.trim().is_empty() {
+            errors.push("evidence_policy contains an empty rule".to_string());
+        }
+        if redact_support_text(policy, true) != policy.as_str() {
+            errors.push("evidence_policy contains sensitive public evidence".to_string());
+        }
+    }
+
+    let mut ids = BTreeSet::new();
+    for row in &matrix.rows {
+        if !ids.insert(row.id.as_str()) {
+            errors.push(format!("duplicate compatibility row id: {}", row.id));
+        }
+        for (field, value) in [
+            ("id", row.id.as_str()),
+            ("workflow", row.workflow.as_str()),
+            ("dependency", row.dependency.as_str()),
+            ("dependency_version", row.dependency_version.as_str()),
+            ("host_platform", row.host_platform.as_str()),
+            ("configuration_class", row.configuration_class.as_str()),
+            ("smoke_script", row.smoke_script.as_str()),
+            ("artifact_reference", row.artifact_reference.as_str()),
+            ("notes", row.notes.as_str()),
+        ] {
+            if value.trim().is_empty() {
+                errors.push(format!("row {} has an empty {field}", row.id));
+            }
+        }
+        if row.openirl_revision != matrix.source_revision {
+            errors.push(format!(
+                "row {} does not match the matrix source revision",
+                row.id
+            ));
+        }
+        let high_maturity = matches!(
+            row.maturity,
+            EvidenceMaturity::IntegrationValidated
+                | EvidenceMaturity::FieldValidated
+                | EvidenceMaturity::Released
+        );
+        if high_maturity
+            && (row.dependency_version == "not-recorded"
+                || row.host_platform == "not-recorded"
+                || row.artifact_reference == "not-run")
+        {
+            errors.push(format!(
+                "row {} lacks concrete version, host, or artifact evidence",
+                row.id
+            ));
+        }
+        if row.result == CompatibilityResult::NotRun && row.maturity != EvidenceMaturity::Modeled {
+            errors.push(format!(
+                "row {} cannot claim evidence maturity for a check that did not run",
+                row.id
+            ));
+        }
+        if row.result == CompatibilityResult::Passed && row.maturity == EvidenceMaturity::Modeled {
+            errors.push(format!("row {} cannot pass at modeled maturity", row.id));
+        }
+        if Path::new(&row.artifact_reference).is_absolute()
+            || row.artifact_reference.split('/').any(|part| part == "..")
+        {
+            errors.push(format!(
+                "row {} artifact_reference must be public and repository-relative",
+                row.id
+            ));
+        }
+        let public_text = format!(
+            "{} {} {} {} {} {} {} {}",
+            row.workflow,
+            row.dependency,
+            row.dependency_version,
+            row.host_platform,
+            row.configuration_class,
+            row.smoke_script,
+            row.artifact_reference,
+            row.notes
+        );
+        if redact_support_text(&public_text, true) != public_text {
+            errors.push(format!("row {} contains sensitive public evidence", row.id));
+        }
+    }
+
+    CompatibilityValidationReport {
+        ok: errors.is_empty(),
+        errors,
+    }
+}
+
+fn is_git_revision(value: &str) -> bool {
+    value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn looks_like_date(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() != 10
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || bytes
+            .iter()
+            .enumerate()
+            .any(|(index, byte)| !matches!(index, 4 | 7) && !byte.is_ascii_digit())
+    {
+        return false;
+    }
+    let year = i32::from(bytes[0] - b'0') * 1_000
+        + i32::from(bytes[1] - b'0') * 100
+        + i32::from(bytes[2] - b'0') * 10
+        + i32::from(bytes[3] - b'0');
+    let month = (bytes[5] - b'0') * 10 + (bytes[6] - b'0');
+    let day = (bytes[8] - b'0') * 10 + (bytes[9] - b'0');
+    let Ok(month) = Month::try_from(month) else {
+        return false;
+    };
+    Date::from_calendar_date(year, month, day).is_ok()
 }
 
 /// Builds the mobile field alpha field-validation plan.
@@ -677,5 +1094,52 @@ mod tests {
                 .iter()
                 .any(|item| item.device == FieldDevice::IrlPro)
         );
+    }
+
+    #[test]
+    fn compatibility_matrix_keeps_live_claims_unproven() {
+        let revision = "a".repeat(40);
+        let matrix = build_compatibility_matrix(38, revision, "2026-08-01");
+        let validation = validate_compatibility_matrix(&matrix);
+        assert!(validation.ok, "{:?}", validation.errors);
+        assert!(matrix.rows.iter().any(|row| {
+            row.maturity == EvidenceMaturity::LocalRuntimeValidated
+                && row.result == CompatibilityResult::Passed
+        }));
+        assert!(!matrix.rows.iter().any(|row| {
+            matches!(
+                row.maturity,
+                EvidenceMaturity::IntegrationValidated
+                    | EvidenceMaturity::FieldValidated
+                    | EvidenceMaturity::Released
+            ) && row.result == CompatibilityResult::Passed
+        }));
+    }
+
+    #[test]
+    fn compatibility_matrix_rejects_unsafe_or_overstated_evidence() {
+        let mut matrix = build_compatibility_matrix(38, "a".repeat(40), "2026-99-99");
+        matrix.rows[0].maturity = EvidenceMaturity::FieldValidated;
+        matrix.rows[0].notes = "dashboard_token=synthetic-secret".to_string();
+        let validation = validate_compatibility_matrix(&matrix);
+        assert!(!validation.ok);
+        assert!(validation.errors.len() >= 3);
+    }
+
+    #[test]
+    fn checked_in_compatibility_matrix_is_valid() -> Result<(), Box<dyn std::error::Error>> {
+        let matrix: CompatibilityMatrix =
+            serde_json::from_str(include_str!("../../../compatibility/matrix-v1.json"))?;
+        let validation = validate_compatibility_matrix(&matrix);
+        assert!(validation.ok, "{:?}", validation.errors);
+        assert_eq!(
+            matrix,
+            build_compatibility_matrix(
+                38,
+                "73d54bea13b5d02bb5d5b91c54cc74e49cc2a66d",
+                "2026-08-01"
+            )
+        );
+        Ok(())
     }
 }

@@ -23,6 +23,7 @@
   <a href="#quickstart">Quickstart</a> |
   <a href="#what-openirl-does">Capabilities</a> |
   <a href="#validation-model">Validation</a> |
+  <a href="docs/COMPATIBILITY.md">Compatibility</a> |
   <a href="#repository-map">Repository map</a> |
   <a href="docs/README.md">Docs</a> |
   <a href="CONTRIBUTING.md">Contributing</a> |
@@ -37,6 +38,7 @@
 - [Quickstart](#quickstart)
 - [Common Commands](#common-commands)
 - [Validation Model](#validation-model)
+- [Compatibility Evidence](docs/COMPATIBILITY.md)
 - [Architecture](#architecture)
 - [Repository Map](#repository-map)
 - [Documentation Map](#documentation-map)
@@ -144,6 +146,7 @@ If dashboard auth is enabled and `OPENIRL_DASHBOARD_TOKEN` is configured, the sm
 | Validate a config | `cargo run --package openirl-agent -- check-config --config config/openirl.example.toml` |
 | Start the deterministic first-run demo | `cargo run --package openirl-agent -- demo` |
 | Print scoped readiness without starting a server | `cargo run --package openirl-agent -- readiness` |
+| Validate the published compatibility evidence | `cargo run --package openirl-agent -- compatibility-validate --file compatibility/matrix-v1.json` |
 | Serve the local dashboard | `cargo run --package openirl-agent -- serve --config config/openirl.example.toml` |
 | Print the desktop/tray shell plan | `cargo run --package openirl-desktop -- plan` |
 | Materialize fallback assets | `cargo run --package openirl-agent -- artifacts materialize-fallback` |
@@ -159,6 +162,7 @@ OpenIRL separates source-level validation from live dependency validation.
 | Static repository validation | Required files exist, text markers are clean, JSON/TOML parses, and handoff docs stay aligned. | `python3 scripts/static_validate.py`, `python3 scripts/audit/handoff_audit.py` |
 | Rust workspace validation | Dependency policy, formatting, Clippy, tests, and workspace gates pass on the local codebase. | `cargo deny check`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `cargo xtask ci` |
 | Deterministic demo validation | The local demo serves fixed synthetic health/profile evidence and keeps every live dependency marked not run. | `python3 scripts/smoke/demo-mode-smoke.py` |
+| Compatibility evidence validation | The versioned matrix is structurally valid, source-pinned, public-safe, and explicit about unrun integrations. | `cargo run --package openirl-agent -- compatibility-validate --file compatibility/matrix-v1.json` |
 | API/dashboard validation | The local agent serves expected endpoints and dashboard routes. | `cargo run --package openirl-agent -- serve --config config/openirl.example.toml`, `python3 scripts/smoke/api_smoke.py` |
 | Live dependency validation | OBS, MediaMTX, encoders, relay hosts, SRTLA tooling, tunnels, WebRTC preview, or Windows packaging work in a real environment. | Run the matching script from [Live Smoke Scripts](#live-smoke-scripts). |
 
@@ -231,6 +235,7 @@ OpenIRL intentionally keeps media engines process-bound. Rust coordinates config
 | [Quickstart guide](docs/guides/quickstart.md) | First run, local dashboard, config inspection, and API smoke flow. |
 | [Architecture](docs/ARCHITECTURE.md) | Workspace structure and process-bound integration model. |
 | [Validation](docs/VALIDATION.md) | Authoritative source and runtime validation commands. |
+| [Compatibility evidence](docs/COMPATIBILITY.md) | Versioned dependency matrix, evidence maturity, and field contribution rules. |
 | [Maintainer checks](docs/MAINTAINER_CHECKS.md) | Release-claim rules and live dependency evidence checklist. |
 | [Release checklist](docs/RELEASE_CHECKLIST.md) | Package and live-environment gates for alpha releases. |
 | [Product roadmap](docs/ROADMAP.md) | Current source status, public milestones, and contributor priorities. |
