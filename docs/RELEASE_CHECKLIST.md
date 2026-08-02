@@ -10,13 +10,17 @@
 - No legacy numbered pass labels remain.
 - No unfinished markers remain.
 - Checksum generated.
+- Windows portable archive and external manifest are independently verified on a second clean Windows runner.
+- Every packaged file matches the manifest's path, size, and SHA-256 digest.
 
 ## Public repository and supply chain
 
 - GitHub Actions references are pinned to reviewed immutable commits.
+- Trusted branch and tag artifacts receive keyless signed provenance only after independent verification.
 - Dependency-review checks are enabled for pull requests.
 - Container base images are pinned by digest and `.dockerignore` excludes credentials, caches, support bundles, and local metadata.
 - Secret and redaction canaries pass without publishing raw scan output or generated support bundles.
+- The bounded release-artifact scan rejects local build paths, unsafe archive entries, credential containers, and high-confidence credential patterns.
 - Generated artifact directories and files have owner-only permissions where supported.
 - Default MediaMTX listeners bind to loopback; any LAN, VPN, or public exposure has explicit authentication and network review.
 
@@ -30,6 +34,7 @@
 
 ## Runtime package
 
+- Packaged `openirl-agent.exe readiness` and `openirl-desktop.exe plan` commands pass on a clean Windows runner.
 - OBS WebSocket smoke script passes.
 - MediaMTX ingest path works for SRT and RTMP.
 - Dashboard loads on a phone.
@@ -40,3 +45,7 @@
 ## Evidence boundary
 
 Automated source and API checks do not prove live OBS, MediaMTX, mobile encoder, BELABOX, SRTLA, tunnel, WebRTC, or Windows installer behavior. Record the exact smoke script, dependency versions, host platform, and artifact or log evidence before making a live integration claim.
+
+GitHub's signed artifact provenance identifies the workflow and exact files. It
+does not replace Authenticode code signing, publisher identity, SmartScreen
+reputation, or real integration evidence. See [Release Provenance](RELEASE_PROVENANCE.md).

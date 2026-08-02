@@ -12,6 +12,7 @@ The repository currently includes:
 - brownout-aware health classification, fallback scene decisions, metrics parsing, session evidence, and support-bundle export
 - localhost-first binding, explicit LAN/auth validation, browser-origin checks, structured redaction, bounded process and HTTP reads, and owner-restricted generated artifacts
 - source-level validation, security checks, dependency policy, release scripts, live-smoke entry points, and public contributor documentation
+- a two-runner Windows portable workflow with per-file manifests, bounded artifact scanning, and keyless signed provenance for trusted builds
 - a deterministic local demo and scoped readiness report that keep source, local-runtime, and live-environment evidence separate
 - a machine-validated compatibility matrix that pins every row to an exact source revision and evidence maturity
 
@@ -43,9 +44,9 @@ Automated source validation is not live field proof. OBS, MediaMTX, mobile encod
 
 ### 4. Reproducible releases
 
-- Produce signed, reproducible alpha artifacts for supported platforms with source revisions and checksums.
-- Add provenance or attestation where the hosting and release workflow support it.
-- Run package smoke tests on the actual target hosts, especially the Windows-first alpha path.
+- Maintain source-pinned, repeatable alpha artifacts for supported platforms with revisions, checksums, and explicit build inputs.
+- Extend keyless provenance and independent verification as additional host platforms become supported.
+- Keep package CLI smoke tests on actual target hosts, especially the Windows-first alpha path.
 - Keep CI inputs pinned, dependency review active, and release claims linked to evidence.
 
 ### 5. Contributor and community growth

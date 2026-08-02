@@ -38,6 +38,13 @@ def rel(path: Path) -> str:
 
 def main() -> int:
     findings=[]
+    action_ref = re.compile(r'\buses:\s*([^\s]+)@([^\s#]+)')
+    for pattern in ('*.yml','*.yaml'):
+        for path in (ROOT/'.github/workflows').glob(pattern):
+            for idx,line in enumerate(path.read_text(encoding='utf-8').splitlines(),1):
+                match = action_ref.search(line)
+                if match and not re.fullmatch(r'[0-9a-f]{40}', match.group(2)):
+                    findings.append((f'{rel(path)}:{idx}','action-pin',f'{match.group(1)} must use an immutable commit'))
     for path in ROOT.rglob('*.json'):
         if path.name.startswith('._'):
             continue
@@ -70,9 +77,11 @@ def main() -> int:
     required = [
         'README.md','CONTRIBUTING.md','SECURITY.md','SUPPORT.md','LICENSE-APACHE','LICENSE-MIT','Cargo.toml','apps/openirl-agent/src/main.rs',
         'crates/openirl-v1/src/lib.rs','docs/ARCHITECTURE.md','docs/SECURITY.md',
-        'docs/README.md','docs/VALIDATION.md','docs/MAINTAINER_CHECKS.md','docs/COMPATIBILITY.md',
+        'docs/README.md','docs/VALIDATION.md','docs/MAINTAINER_CHECKS.md','docs/COMPATIBILITY.md','docs/RELEASE_PROVENANCE.md',
         'compatibility/matrix-v1.json','fixtures/field/compatibility-evidence.template.json',
-        'docs/features/obs-reconciliation.md','scripts/audit/handoff_audit.py'
+        'docs/features/obs-reconciliation.md','scripts/audit/handoff_audit.py',
+        'scripts/security/release-artifact-scan.py','scripts/windows/verify-alpha-portable.ps1',
+        '.github/workflows/windows-package.yml','release/ALPHA_RELEASE_NOTES.md'
     ]
     for item in required:
         if not (ROOT/item).exists():
