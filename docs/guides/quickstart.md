@@ -28,7 +28,23 @@ cargo xtask ci
 
 These commands prove source shape, formatting, lint posture, Rust tests, and repository validation. They do not prove that a specific OBS profile, MediaMTX host, mobile phone, relay host, tunnel, BELABOX, SRTLA deployment, or Windows package works in your environment.
 
-## 3. Inspect the Example Config
+## 3. Start the Deterministic Demo
+
+```bash
+cargo run --package openirl-agent -- demo
+```
+
+Open `http://127.0.0.1:7707`, then select **Scoped Readiness**. The report separates source checks, local-runtime evidence, and live-environment checks. Demo mode seeds a fixed local health sequence and a redacted synthetic profile; it does not contact or start OBS, MediaMTX, a relay, a mobile encoder, or a cloud service.
+
+To inspect the same readiness contract without starting a listener:
+
+```bash
+cargo run --package openirl-agent -- readiness
+```
+
+Neither command proves contribution media, scene control against real OBS, device profile import, relay reachability, or Windows installation.
+
+## 4. Inspect the Example Config
 
 ```bash
 cargo run --package openirl-agent -- check-config --config config/openirl.example.toml
@@ -36,7 +52,7 @@ cargo run --package openirl-agent -- check-config --config config/openirl.exampl
 
 The example config keeps the dashboard on `127.0.0.1:7707`, keeps relay execution disabled until configured, and reads secrets from environment variables rather than checked-in files.
 
-## 4. Start the Local Agent
+## 5. Start the Local Agent
 
 ```bash
 cargo run --package openirl-agent -- serve --config config/openirl.example.toml
@@ -50,7 +66,7 @@ http://127.0.0.1:7707
 
 If dashboard auth is enabled, set the token in the environment named by `security.dashboard_token_env` before starting the agent.
 
-## 5. Run the API Smoke Check
+## 6. Run the API Smoke Check
 
 In another shell:
 
@@ -60,7 +76,7 @@ python3 scripts/smoke/api_smoke.py
 
 When `OPENIRL_DASHBOARD_TOKEN` is present, the smoke script sends it as a bearer token. Do not paste that token into issues, logs, screenshots, or support bundles.
 
-## 6. Materialize Local Artifacts
+## 7. Materialize Local Artifacts
 
 Generate reviewable local artifacts without switching to live OBS control:
 
@@ -72,7 +88,7 @@ cargo run --package openirl-agent -- v1 summary
 
 Review generated artifacts before sharing them.
 
-## 7. Move to Live OBS and MediaMTX Checks
+## 8. Move to Live OBS and MediaMTX Checks
 
 Run these only when the named dependency is available:
 
@@ -86,7 +102,7 @@ scripts/tunnels/tunnel-readiness-smoke.sh
 
 Use the matching PowerShell scripts on Windows where available. Record the exact OBS, MediaMTX, encoder, relay, tunnel, and Windows host versions used.
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 - If the dashboard does not load, confirm the agent is still running and that the configured bind address is local.
 - If contribution media is missing, use [No-video troubleshooting](../troubleshooting/no-video.md).

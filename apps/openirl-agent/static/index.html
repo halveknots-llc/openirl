@@ -47,8 +47,8 @@
       </div>
     </header>
     <div class="card">
-      <p>Rust-first local agent is running. The v1/public-beta layer covers OBS reconciliation, local ingest, mobile encoder compatibility, dashboard security, brownout handling, relay and tunnel planning, release gates, WebRTC preview planning, vertical clip workflows, and plugin API stabilization.</p>
-      <p>Core path: install locally, connect OBS, generate an encoder profile, simulate or ingest metrics, switch fallback scenes, mark clips, and run the alpha and mobile field validation evidence plans.</p>
+      <p>The local agent exposes typed plans and controls for OBS, ingest, encoder profiles, brownout handling, relays, support evidence, and release gates. Use the scoped readiness report to distinguish local behavior from external integrations that have actually been tested.</p>
+      <p>Core path: inspect readiness, configure the local stack, connect OBS and a media router when available, generate an encoder profile, evaluate metrics, and record environment-specific evidence.</p>
     </div>
 
     <div class="grid">
@@ -79,7 +79,8 @@
 
       <div class="card">
         <h2>Metrics and Relay</h2>
-        <button data-get="/api/runtime/readiness">Readiness</button>
+        <button data-get="/api/readiness">Scoped Readiness</button>
+        <button data-get="/api/runtime/readiness">Runtime Detail</button>
         <button data-get="/api/relay/status">Relay Status</button>
         <button data-get="/api/relay/plan">Relay Plan</button>
         <button data-get="/api/metrics/sources">Metrics Sources</button>

@@ -42,6 +42,13 @@ def main() -> int:
     validation = call("GET", "/api/config/validation")
     require(validation.get("error_count") == 0, "default config has validation errors")
 
+    readiness = call("GET", "/api/readiness")
+    require(readiness.get("mode") == "standard", "readiness mode was not standard")
+    require(
+        readiness.get("summary", {}).get("live_environment", {}).get("satisfied") == 0,
+        "readiness inferred live environment evidence",
+    )
+
     quickstart = call("POST", "/api/onboarding/quickstart")
     require("profile" in quickstart, "quickstart missing profile")
     require("qr" in quickstart, "quickstart missing qr field")

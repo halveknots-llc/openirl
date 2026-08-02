@@ -20,6 +20,7 @@ members = [
   "crates/openirl-production",
   "crates/openirl-profiles",
   "crates/openirl-qr",
+  "crates/openirl-readiness",
   "crates/openirl-scene-templates",
   "crates/openirl-relay-control",
   "crates/openirl-release",

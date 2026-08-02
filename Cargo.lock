@@ -794,6 +794,7 @@ dependencies = [
  "openirl-production",
  "openirl-profiles",
  "openirl-qr",
+ "openirl-readiness",
  "openirl-relay-control",
  "openirl-release",
  "openirl-scene-templates",
@@ -978,6 +979,20 @@ version = "0.1.0-alpha.0"
 dependencies = [
  "qrcode",
  "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "openirl-readiness"
+version = "0.1.0-alpha.0"
+dependencies = [
+ "openirl-config",
+ "openirl-core",
+ "openirl-health",
+ "openirl-metrics",
+ "openirl-profiles",
+ "serde",
+ "serde_json",
  "thiserror",
 ]
 

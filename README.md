@@ -67,7 +67,7 @@ The project goal is straightforward: keep the live show under the operator's con
 
 ## Status
 
-OpenIRL is public source with an alpha runtime package. The repository includes automated validation for the local agent, API contracts, config model, feature catalog, profile generation, support artifacts, and safety rules.
+OpenIRL is a public-source alpha. The repository includes automated validation for the local agent, API contracts, config model, feature catalog, profile generation, support artifacts, and safety rules. Downloadable runtime releases are not claimed until the Windows artifact workflow and matching evidence complete.
 
 The source package also includes live smoke scripts for OBS, MediaMTX, relay, mobile encoder, tunnel, WebRTC preview, and Windows packaging environments. Those checks require the real external tools and devices. Treat automated Rust/API validation as source-level proof; treat live OBS, MediaMTX, mobile encoder, BELABOX, SRTLA, tunnel, and Windows-package success as proven only after the matching smoke script runs in that environment.
 
@@ -93,7 +93,21 @@ cargo test --workspace
 cargo xtask ci
 ```
 
-### 3. Inspect the Example Config
+### 3. Start the Deterministic Demo
+
+```bash
+cargo run --package openirl-agent -- demo
+```
+
+Open `http://127.0.0.1:7707`, then select **Scoped Readiness**. Demo mode uses fixed synthetic metrics, a redacted localhost encoder profile, and the dry-run OBS adapter. It does not contact OBS, MediaMTX, a relay, a mobile encoder, or any cloud service, and it never reports those dependencies as tested.
+
+The same scoped report is available without starting a server:
+
+```bash
+cargo run --package openirl-agent -- readiness
+```
+
+### 4. Inspect the Example Config
 
 ```bash
 cargo run --package openirl-agent -- check-config --config config/openirl.example.toml
@@ -101,7 +115,7 @@ cargo run --package openirl-agent -- check-config --config config/openirl.exampl
 
 The example configuration binds the dashboard to `127.0.0.1:7707`, keeps relay execution disabled by default, redacts secrets in output, and uses a review-safe OBS adapter unless live OBS WebSocket access is explicitly configured.
 
-### 4. Start the Local Agent
+### 5. Start the Local Agent
 
 ```bash
 cargo run --package openirl-agent -- serve --config config/openirl.example.toml
@@ -113,7 +127,7 @@ Open the dashboard:
 http://127.0.0.1:7707
 ```
 
-### 5. Run the API Smoke Check
+### 6. Run the API Smoke Check
 
 ```bash
 python3 scripts/smoke/api_smoke.py
@@ -128,6 +142,8 @@ If dashboard auth is enabled and `OPENIRL_DASHBOARD_TOKEN` is configured, the sm
 | Print the product feature catalog | `cargo run --package openirl-agent -- features` |
 | Print the v1/public-beta summary | `cargo run --package openirl-agent -- v1 summary` |
 | Validate a config | `cargo run --package openirl-agent -- check-config --config config/openirl.example.toml` |
+| Start the deterministic first-run demo | `cargo run --package openirl-agent -- demo` |
+| Print scoped readiness without starting a server | `cargo run --package openirl-agent -- readiness` |
 | Serve the local dashboard | `cargo run --package openirl-agent -- serve --config config/openirl.example.toml` |
 | Print the desktop/tray shell plan | `cargo run --package openirl-desktop -- plan` |
 | Materialize fallback assets | `cargo run --package openirl-agent -- artifacts materialize-fallback` |
@@ -142,6 +158,7 @@ OpenIRL separates source-level validation from live dependency validation.
 | --- | --- | --- |
 | Static repository validation | Required files exist, text markers are clean, JSON/TOML parses, and handoff docs stay aligned. | `python3 scripts/static_validate.py`, `python3 scripts/audit/handoff_audit.py` |
 | Rust workspace validation | Dependency policy, formatting, Clippy, tests, and workspace gates pass on the local codebase. | `cargo deny check`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `cargo xtask ci` |
+| Deterministic demo validation | The local demo serves fixed synthetic health/profile evidence and keeps every live dependency marked not run. | `python3 scripts/smoke/demo-mode-smoke.py` |
 | API/dashboard validation | The local agent serves expected endpoints and dashboard routes. | `cargo run --package openirl-agent -- serve --config config/openirl.example.toml`, `python3 scripts/smoke/api_smoke.py` |
 | Live dependency validation | OBS, MediaMTX, encoders, relay hosts, SRTLA tooling, tunnels, WebRTC preview, or Windows packaging work in a real environment. | Run the matching script from [Live Smoke Scripts](#live-smoke-scripts). |
 

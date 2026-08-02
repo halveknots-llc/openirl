@@ -28,6 +28,7 @@ openirl-metrics = { path = "../../crates/openirl-metrics" }
 openirl-obs = { path = "../../crates/openirl-obs" }
 openirl-release = { path = "../../crates/openirl-release" }
 openirl-qr = { path = "../../crates/openirl-qr" }
+openirl-readiness = { path = "../../crates/openirl-readiness" }
 openirl-production = { path = "../../crates/openirl-production" }
 openirl-onboarding = { path = "../../crates/openirl-onboarding" }
 openirl-profiles = { path = "../../crates/openirl-profiles" }

@@ -12,6 +12,7 @@ The repository currently includes:
 - brownout-aware health classification, fallback scene decisions, metrics parsing, session evidence, and support-bundle export
 - localhost-first binding, explicit LAN/auth validation, browser-origin checks, structured redaction, bounded process and HTTP reads, and owner-restricted generated artifacts
 - source-level validation, security checks, dependency policy, release scripts, live-smoke entry points, and public contributor documentation
+- a deterministic local demo and scoped readiness report that keep source, local-runtime, and live-environment evidence separate
 
 Automated source validation is not live field proof. OBS, MediaMTX, mobile encoder, BELABOX, SRTLA, tunnel, WebRTC, and Windows packaging claims remain environment-specific until the matching smoke checks run with the real dependency.
 
@@ -20,8 +21,8 @@ Automated source validation is not live field proof. OBS, MediaMTX, mobile encod
 ### 1. Trusted first run
 
 - Keep the quickstart under ten minutes on a clean development machine.
-- Add a deterministic demo mode with safe sample data and no network credentials.
-- Provide a single readiness report that clearly separates source checks, local runtime checks, and live dependency checks.
+- Keep the deterministic demo fixtures stable and expand them only with public-safe synthetic data.
+- Keep the scoped readiness report aligned with new source, local-runtime, and live dependency gates.
 - Expand dashboard API and responsive-browser coverage for setup, auth, profile export, diagnostics, and support bundles.
 - Publish safe screenshots or short recordings only after checking them for tokens, network details, locations, and private operator data.
 
