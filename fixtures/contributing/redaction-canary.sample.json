@@ -1,0 +1,7 @@
+{
+  "dashboard_token": "synthetic-dashboard-canary",
+  "obs_password": "synthetic-obs-canary",
+  "relay_url": "srt://example.test:9000?streamid=synthetic-main&passphrase=synthetic-srt-canary",
+  "relay_host": "192.0.2.10",
+  "safe_note": "synthetic contributor fixture"
+}

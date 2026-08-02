@@ -1,0 +1,19 @@
+{
+  "name": "synthetic-relay",
+  "enabled": false,
+  "auto_start": false,
+  "mode": "local-direct",
+  "backend": "custom",
+  "executable": "synthetic-relay",
+  "args": [
+    "--listen=127.0.0.1:19000",
+    "--access-token=synthetic-relay-canary"
+  ],
+  "working_dir": null,
+  "env": [],
+  "restart_on_exit": false,
+  "metrics_url": "http://127.0.0.1:19001/metrics",
+  "api_url": null,
+  "log_tail_limit": 20,
+  "redact_logs": true
+}

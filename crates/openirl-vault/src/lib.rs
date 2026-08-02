@@ -475,6 +475,26 @@ mod tests {
     }
 
     #[test]
+    fn contributor_redaction_fixture_removes_every_canary() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let payload: Value = serde_json::from_str(include_str!(
+            "../../../fixtures/contributing/redaction-canary.sample.json"
+        ))?;
+        let redacted = serde_json::to_string(&scrub_support_bundle_value(payload, true))?;
+        for canary in [
+            "synthetic-dashboard-canary",
+            "synthetic-obs-canary",
+            "synthetic-srt-canary",
+            "192.0.2.10",
+        ] {
+            assert!(!redacted.contains(canary));
+        }
+        assert!(redacted.contains("<redacted>"));
+        assert!(redacted.contains("<redacted-ip>"));
+        Ok(())
+    }
+
+    #[test]
     fn support_json_redacts_absolute_artifact_paths() {
         let payload = serde_json::json!({
             "root_dir": "/private/operator/support-bundles/abc",

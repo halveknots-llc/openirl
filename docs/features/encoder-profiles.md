@@ -1,5 +1,10 @@
 # Encoder Profiles
 
+Contributors adding an app, hardware family, or protocol combination should use
+the [encoder profile recipe](../contributing/encoder-profile.md). It maps the
+shared enum, generator, CLI, dashboard, preset, fixture, and compatibility
+evidence surfaces that must stay aligned.
+
 OpenIRL generates encoder profiles and QR-oriented payloads for Moblin, IRL Pro, Larix, and BELABOX-oriented workflows. Profiles should make local contribution paths repeatable without hiding stream IDs, passphrases, or relay choices from the operator.
 
 ## Source Validation

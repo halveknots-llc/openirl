@@ -1142,4 +1142,25 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn contributor_live_smoke_fixture_cannot_claim_a_run() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let row: CompatibilityRow = serde_json::from_str(include_str!(
+            "../../../fixtures/contributing/live-smoke-evidence.sample.json"
+        ))?;
+        let matrix = CompatibilityMatrix {
+            matrix_revision: 1,
+            schema_revision: 38,
+            source_revision: row.openirl_revision.clone(),
+            reviewed_on: "2026-08-01".to_string(),
+            rows: vec![row],
+            evidence_policy: vec!["Synthetic schema fixture only; no live claim.".to_string()],
+        };
+        let validation = validate_compatibility_matrix(&matrix);
+        assert!(validation.ok, "{:?}", validation.errors);
+        assert_eq!(matrix.rows[0].maturity, EvidenceMaturity::Modeled);
+        assert_eq!(matrix.rows[0].result, CompatibilityResult::NotRun);
+        Ok(())
+    }
 }

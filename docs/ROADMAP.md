@@ -13,6 +13,7 @@ The repository currently includes:
 - localhost-first binding, explicit LAN/auth validation, browser-origin checks, structured redaction, bounded process and HTTP reads, and owner-restricted generated artifacts
 - source-level validation, security checks, dependency policy, release scripts, live-smoke entry points, and public contributor documentation
 - a two-runner Windows portable workflow with per-file manifests, bounded artifact scanning, and keyless signed provenance for trusted builds
+- contributor recipes backed by typed synthetic fixtures for profiles, relay processes, metrics, redaction, and live-smoke evidence
 - a deterministic local demo and scoped readiness report that keep source, local-runtime, and live-environment evidence separate
 - a machine-validated compatibility matrix that pins every row to an exact source revision and evidence maturity
 
@@ -52,7 +53,7 @@ Automated source validation is not live field proof. OBS, MediaMTX, mobile encod
 ### 5. Contributor and community growth
 
 - Maintain a small set of starter issues with reproducible fixtures and clear acceptance criteria.
-- Add contributor recipes for adding an encoder profile, a relay backend, a metric parser, a redaction canary, and a live smoke check.
+- Keep contributor recipes and their typed fixtures aligned as extension surfaces evolve.
 - Publish release notes that explain operator impact, compatibility, security changes, and known limitations.
 - Add issue labels and triage rules that route bug reports, field evidence, security reports, documentation, and good-first contributions quickly.
 - Prefer demos that show a complete local workflow over feature-count marketing.
