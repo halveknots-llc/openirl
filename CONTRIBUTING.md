@@ -29,6 +29,21 @@ cargo xtask ci
 
 Live smoke scripts require the named external tool or device. Do not claim OBS, MediaMTX, mobile encoder, BELABOX, SRTLA, tunnel, or Windows installer validation unless that exact check ran in that environment.
 
+## Contributor Recipes
+
+Use the [contributor recipe index](docs/contributing/README.md) for the supported
+extension paths:
+
+- encoder profile and compatibility test
+- process-bound relay backend and readiness plan
+- Prometheus or SRTLA metric parser
+- secret, URL, argument, path, or support-evidence redaction canary
+- guarded live smoke check and compatibility evidence
+
+Each recipe names the owning crate or script, a typed synthetic fixture, the
+smallest focused gate, relevant operator documentation, and the point where a
+real external dependency becomes mandatory.
+
 ## Pull Request Expectations
 
 - Keep changes focused and explain the operator impact.
@@ -36,7 +51,9 @@ Live smoke scripts require the named external tool or device. Do not claim OBS, 
 - Preserve localhost-first defaults and auth requirements for broader network exposure.
 - Redact stream keys, SRT passphrases, dashboard tokens, OBS passwords, and relay credentials from logs, reports, fixtures, and screenshots.
 - Add or update focused tests when behavior changes.
+- Use synthetic fixtures consumed by production types; never derive fixture values from a real operator environment.
 - Include the validation commands you ran and the commands you intentionally did not run.
+- Name the applicable contributor recipe or explain why the change uses a different established path.
 
 ## Contribution Licensing
 

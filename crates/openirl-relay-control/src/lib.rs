@@ -867,4 +867,19 @@ mod tests {
         assert_eq!(second_line, "next");
         Ok(())
     }
+
+    #[tokio::test]
+    async fn contributor_relay_fixture_is_disabled_and_redacted()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let config: RelayProcessConfig = serde_json::from_str(include_str!(
+            "../../../fixtures/contributing/relay-process.sample.json"
+        ))?;
+        let plan = RelaySupervisor::new(config).plan().await;
+        assert!(!plan.enabled);
+        assert_eq!(plan.backend, RelayBackend::Custom);
+        let command = plan.redacted_command.join(" ");
+        assert!(command.contains("--access-token=<redacted>"));
+        assert!(!command.contains("synthetic-relay-canary"));
+        Ok(())
+    }
 }

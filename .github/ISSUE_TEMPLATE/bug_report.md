@@ -42,4 +42,5 @@ Paste the relevant non-secret output:
 ## Safety Check
 
 - [ ] I removed stream keys, SRT passphrases, dashboard tokens, OBS passwords, private relay credentials, and credential-bearing URLs.
-- [ ] I reviewed any support bundle or screenshot before attaching it.
+- [ ] I reviewed every excerpt and screenshot before attaching it; I did not attach a raw support bundle.
+- [ ] I removed private network details, local paths, device identifiers, and location-sensitive media.

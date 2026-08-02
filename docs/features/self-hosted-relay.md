@@ -1,5 +1,10 @@
 # Self-Hosted Relay
 
+New process-supervised tools should follow the
+[relay backend recipe](../contributing/relay-backend.md). OpenIRL keeps protocol
+engines external and requires disabled defaults, typed arguments, bounded logs,
+and shared redaction.
+
 Self-hosted relay workflows let operators bridge difficult networks without handing OBS control or stream credentials to a managed Cloud OBS service. OpenIRL plans and supervises relay processes, but external media tools still own protocol-specific behavior.
 
 ## Source Validation

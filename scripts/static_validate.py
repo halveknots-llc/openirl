@@ -81,7 +81,16 @@ def main() -> int:
         'compatibility/matrix-v1.json','fixtures/field/compatibility-evidence.template.json',
         'docs/features/obs-reconciliation.md','scripts/audit/handoff_audit.py',
         'scripts/security/release-artifact-scan.py','scripts/windows/verify-alpha-portable.ps1',
-        '.github/workflows/windows-package.yml','release/ALPHA_RELEASE_NOTES.md'
+        '.github/workflows/windows-package.yml','release/ALPHA_RELEASE_NOTES.md',
+        'docs/contributing/README.md','docs/contributing/encoder-profile.md',
+        'docs/contributing/relay-backend.md','docs/contributing/metrics-parser.md',
+        'docs/contributing/redaction-canary.md','docs/contributing/live-smoke.md',
+        'fixtures/contributing/encoder-profile.sample.json',
+        'fixtures/contributing/relay-process.sample.json',
+        'fixtures/contributing/metrics-exporter.sample.prom',
+        'fixtures/contributing/redaction-canary.sample.json',
+        'fixtures/contributing/live-smoke-evidence.sample.json',
+        'issue_templates/feature_request.md'
     ]
     for item in required:
         if not (ROOT/item).exists():

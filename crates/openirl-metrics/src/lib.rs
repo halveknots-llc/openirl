@@ -816,6 +816,17 @@ paths_bytes_received{name="main",state="ready"} 1000
     }
 
     #[test]
+    fn contributor_metrics_fixture_parses_as_prometheus_text() -> Result<(), MetricsError> {
+        let document = parse_prometheus_text(include_str!(
+            "../../../fixtures/contributing/metrics-exporter.sample.prom"
+        ))?;
+        assert_eq!(document.named("synthetic_paths").count(), 1);
+        assert_eq!(document.named("synthetic_bytes_received").count(), 1);
+        assert_eq!(document.named("synthetic_bytes_sent").count(), 1);
+        Ok(())
+    }
+
+    #[test]
     fn calculates_kbps_from_byte_delta() -> Result<(), MetricsError> {
         let mut accumulator = MetricsAccumulator::new();
         let _first = accumulator.ingest_prometheus_text(

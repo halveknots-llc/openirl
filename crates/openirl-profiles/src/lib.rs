@@ -322,4 +322,21 @@ mod tests {
             Err(ProfileError::Unsupported { .. })
         ));
     }
+
+    #[test]
+    fn contributor_profile_fixture_is_typed_and_redacted() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let request: ProfileRequest = serde_json::from_str(include_str!(
+            "../../../fixtures/contributing/encoder-profile.sample.json"
+        ))?;
+        let profile = generate_profile(&request)?;
+        assert!(
+            profile
+                .contribution_url
+                .contains("synthetic-profile-canary")
+        );
+        assert!(profile.display_url.contains("passphrase=<redacted>"));
+        assert!(!profile.display_url.contains("synthetic-profile-canary"));
+        Ok(())
+    }
 }

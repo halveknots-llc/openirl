@@ -1,0 +1,9 @@
+# HELP synthetic_paths Active synthetic contribution paths.
+# TYPE synthetic_paths gauge
+synthetic_paths{name="synthetic-main",state="ready"} 1
+# HELP synthetic_bytes_received Total synthetic bytes received.
+# TYPE synthetic_bytes_received counter
+synthetic_bytes_received{name="synthetic-main"} 500000
+# HELP synthetic_bytes_sent Total synthetic bytes sent.
+# TYPE synthetic_bytes_sent counter
+synthetic_bytes_sent{name="synthetic-main"} 450000

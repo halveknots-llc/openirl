@@ -1,0 +1,14 @@
+{
+  "id": "contributor-live-smoke",
+  "workflow": "Synthetic live-smoke evidence shape",
+  "dependency": "Synthetic media router",
+  "dependency_version": "not-recorded",
+  "host_platform": "not-recorded",
+  "openirl_revision": "0000000000000000000000000000000000000000",
+  "configuration_class": "localhost-synthetic-plan",
+  "smoke_script": "scripts/ingest/local-ingest-smoke.sh",
+  "maturity": "modeled",
+  "result": "not-run",
+  "artifact_reference": "not-run",
+  "notes": "Schema example only; no external dependency was contacted."
+}

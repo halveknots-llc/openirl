@@ -171,13 +171,15 @@ OpenIRL separates source-level validation from live dependency validation.
 ### Live Smoke Scripts
 
 Run these only in an environment with the named external dependency available.
+The mobile `profile-compat-smoke` scripts are source-level JSON shape checks;
+they do not contact a phone or establish device compatibility.
 
-| Script | Requires | Purpose |
+| Check | Requires | Purpose |
 | --- | --- | --- |
 | `scripts/obs/reconcile-smoke.sh` | OBS Studio and OBS WebSocket | Verifies scene/template reconciliation against a real OBS profile. |
 | `scripts/ingest/local-ingest-smoke.sh` | MediaMTX and a publisher path | Verifies local ingest routing and contribution media path. |
 | `scripts/ingest/backup-failover-smoke.sh` | Primary and backup ingest paths | Exercises failover behavior and backup scene selection. |
-| `scripts/mobile/profile-compat-smoke.sh` | Mobile encoder import flow | Checks generated profile compatibility with field devices. |
+| `docs/runbooks/MOBILE_FIELD_ALPHA.md` | Moblin or IRL Pro device and contribution path | Guides manual profile import, contribution, metrics, brownout, and recovery evidence. |
 | `scripts/relay/self-hosted-relay-smoke.sh` | Relay host or local relay process | Verifies relay process plans and readiness behavior. |
 | `scripts/relay/srtla2-compat-smoke.sh` | SRTLA-compatible tooling | Checks bonding-oriented configuration and metrics expectations. |
 | `scripts/tunnels/tunnel-readiness-smoke.sh` | WireGuard, frp, or rathole setup | Checks tunnel readiness for CGNAT and no-public-IP users. |
@@ -242,6 +244,7 @@ OpenIRL intentionally keeps media engines process-bound. Rust coordinates config
 | [Maintainer checks](docs/MAINTAINER_CHECKS.md) | Release-claim rules and live dependency evidence checklist. |
 | [Release checklist](docs/RELEASE_CHECKLIST.md) | Package and live-environment gates for alpha releases. |
 | [Release provenance](docs/RELEASE_PROVENANCE.md) | Repeatable Windows artifacts, independent verification, attestations, and signing boundaries. |
+| [Contributor recipes](docs/contributing/README.md) | Focused extension paths, typed synthetic fixtures, tests, and live evidence boundaries. |
 | [Product roadmap](docs/ROADMAP.md) | Current source status, public milestones, and contributor priorities. |
 | [Security model](docs/SECURITY.md) | Local-first defaults, roles, public bind posture, and support-bundle guidance. |
 | [No-video troubleshooting](docs/troubleshooting/no-video.md) | First-response checks for missing contribution media. |

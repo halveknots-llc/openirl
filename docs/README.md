@@ -23,6 +23,15 @@ Start here if you are evaluating, operating, or contributing to OpenIRL.
 - [No-video troubleshooting](troubleshooting/no-video.md): first-response checks for missing contribution media.
 - [OBS automation](OBS_AUTOMATION.md): OBS scene and WebSocket guidance.
 
+## Contributor Guides
+
+- [Contributor recipes](contributing/README.md): typed synthetic fixtures and focused gates for profiles, relays, metrics, redaction, and live smoke checks.
+- [Encoder profile recipe](contributing/encoder-profile.md)
+- [Relay backend recipe](contributing/relay-backend.md)
+- [Metrics parser recipe](contributing/metrics-parser.md)
+- [Redaction canary recipe](contributing/redaction-canary.md)
+- [Live smoke recipe](contributing/live-smoke.md)
+
 ## Hardware and Encoder Guides
 
 - [Moblin](hardware/moblin.md)
