@@ -2,6 +2,17 @@
 
 All notable OpenIRL changes are documented here. OpenIRL follows a pre-1.0 alpha versioning model while APIs, package shape, and live integration workflows mature.
 
+## Unreleased
+
+### Security and release hardening
+
+- Added browser-origin validation to the API and control authentication boundary; configured cross-origin clients still require a dashboard token.
+- Expanded structured and text redaction for relay environment values, paired secret arguments, credential-bearing URL paths, IPv6 addresses, and absolute local paths.
+- Added bounded relay-log and HTTP-metrics reads plus owner-only permissions for generated artifact directories and files.
+- Changed bundled MediaMTX examples to loopback media listeners by default and documented the review required for broader exposure.
+- Changed public beta packaging to use a clean Git archive with a source-revision manifest and guarded unvalidated Windows packaging skips.
+- Pinned GitHub Actions and container base-image inputs and added pull-request dependency review.
+
 ## 0.1.0-alpha.0
 
 ### Added

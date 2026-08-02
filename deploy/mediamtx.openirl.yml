@@ -1,6 +1,8 @@
 # OpenIRL feature areas MediaMTX template.
 # This is intentionally conservative: it enables common IRL ingest protocols,
 # local API/metrics, and named paths that OBS can consume from the local host.
+# Media listeners bind to loopback by default. Exposing them to a LAN/VPN
+# requires an explicit private-network boundary and authenticated ingress.
 
 logLevel: info
 api: true
@@ -9,13 +11,13 @@ metrics: true
 metricsAddress: 127.0.0.1:9998
 
 rtmp: true
-rtmpAddress: :1935
+rtmpAddress: 127.0.0.1:1935
 
 srt: true
-srtAddress: :9000
+srtAddress: 127.0.0.1:9000
 
 webrtc: true
-webrtcAddress: :8889
+webrtcAddress: 127.0.0.1:8889
 
 hls: false
 rtsp: false

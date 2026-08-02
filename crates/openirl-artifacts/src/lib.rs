@@ -10,12 +10,16 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
-    fs,
+    fs::{self, OpenOptions},
+    io::Write,
     path::{Path, PathBuf},
 };
 use thiserror::Error;
 use time::OffsetDateTime;
 use uuid::Uuid;
+
+#[cfg(unix)]
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 /// Artifact writer errors.
 #[derive(Debug, Error)]
@@ -242,7 +246,7 @@ pub fn materialize_fallback_assets(
     plan: &FallbackAssetPlan,
 ) -> Result<ArtifactMaterialization, ArtifactError> {
     let root = PathBuf::from(&plan.root_dir);
-    fs::create_dir_all(&root)?;
+    create_artifact_dir(&root)?;
     let mut files = Vec::new();
     for asset in &plan.assets {
         let path = root.join(&asset.file_name);
@@ -358,7 +362,7 @@ pub fn export_support_bundle(
 
     let bundle_id = Uuid::new_v4();
     let root = PathBuf::from(&request.output_dir).join(bundle_id.to_string());
-    fs::create_dir_all(&root)?;
+    create_artifact_dir(&root)?;
     let mut files = Vec::new();
     files.push(write_json_artifact(
         root.join("support-bundle.json"),
@@ -401,7 +405,7 @@ pub fn export_field_report_markdown(
     markdown: impl AsRef<str>,
 ) -> Result<ArtifactMaterialization, ArtifactError> {
     let root = output_dir.as_ref();
-    fs::create_dir_all(root)?;
+    create_artifact_dir(root)?;
     let report_id = Uuid::new_v4();
     let report_path = root.join(format!("field-report-{report_id}.md"));
     let mut files = Vec::new();
@@ -477,9 +481,9 @@ pub fn materialize_alpha_source_layout(
     layout: &AlphaSourcePackageLayout,
 ) -> Result<ArtifactMaterialization, ArtifactError> {
     let root = PathBuf::from(&layout.root_dir);
-    fs::create_dir_all(&root)?;
+    create_artifact_dir(&root)?;
     for directory in &layout.directories {
-        fs::create_dir_all(root.join(directory))?;
+        create_artifact_dir(&root.join(directory))?;
     }
 
     let mut files = Vec::new();
@@ -548,10 +552,17 @@ fn write_text_artifact(
 ) -> Result<ArtifactFile, ArtifactError> {
     let path = path.as_ref();
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
+        create_artifact_dir(parent)?;
     }
     let text = content.as_ref();
-    fs::write(path, text.as_bytes())?;
+    let mut options = OpenOptions::new();
+    options.create(true).truncate(true).write(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+    let mut file = options.open(path)?;
+    file.write_all(text.as_bytes())?;
+    #[cfg(unix)]
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
     Ok(ArtifactFile {
         path: path_to_string(path),
         media_type: media_type.into(),
@@ -559,6 +570,13 @@ fn write_text_artifact(
         sha256: sha256_hex(text.as_bytes()),
         purpose: purpose.into(),
     })
+}
+
+fn create_artifact_dir(path: &Path) -> Result<(), std::io::Error> {
+    fs::create_dir_all(path)?;
+    #[cfg(unix)]
+    fs::set_permissions(path, fs::Permissions::from_mode(0o700))?;
+    Ok(())
 }
 
 fn fallback_html(title: &str, subtitle: &str, scene_name: &str) -> String {
@@ -650,6 +668,21 @@ mod tests {
         let bundle = SceneBundle::default_irl();
         let plan = default_fallback_asset_plan(&bundle, "artifacts/assets/fallback");
         assert!(plan.assets.iter().any(|asset| asset.role == SceneRole::Brb));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn generated_artifacts_use_restrictive_modes() -> Result<(), Box<dyn std::error::Error>> {
+        let root = std::env::temp_dir().join(format!("openirl-artifact-test-{}", Uuid::new_v4()));
+        let path = root.join("nested").join("report.txt");
+        let _ = write_text_artifact(&path, "redacted", "text/plain", "test")?;
+        let parent = path.parent().ok_or("artifact parent missing")?;
+        let dir_mode = fs::metadata(parent)?.permissions().mode() & 0o777;
+        let file_mode = fs::metadata(&path)?.permissions().mode() & 0o777;
+        fs::remove_dir_all(&root)?;
+        assert_eq!(dir_mode, 0o700);
+        assert_eq!(file_mode, 0o600);
+        Ok(())
     }
 
     #[test]

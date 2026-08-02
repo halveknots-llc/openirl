@@ -37,6 +37,9 @@ pub enum MetricsError {
     /// Request timed out.
     #[error("metrics request timed out after {0}ms")]
     Timeout(u64),
+    /// HTTP response exceeded the bounded ingestion limit.
+    #[error("metrics HTTP response exceeds the {0}-byte limit")]
+    ResponseTooLarge(usize),
     /// Prometheus text could not be parsed.
     #[error("prometheus parse error at line {line}: {message}")]
     PrometheusParse {
@@ -770,9 +773,10 @@ async fn poll_http_text_inner(endpoint: &HttpEndpoint) -> Result<String, Metrics
     );
     stream.write_all(request.as_bytes()).await?;
     let mut buffer = Vec::new();
-    stream.read_to_end(&mut buffer).await?;
+    let mut limited_stream = stream.take((MAX_HTTP_RESPONSE_BYTES + 1) as u64);
+    limited_stream.read_to_end(&mut buffer).await?;
     if buffer.len() > MAX_HTTP_RESPONSE_BYTES {
-        buffer.truncate(MAX_HTTP_RESPONSE_BYTES);
+        return Err(MetricsError::ResponseTooLarge(MAX_HTTP_RESPONSE_BYTES));
     }
     let response = String::from_utf8_lossy(&buffer).to_string();
     let (headers, body) = response.split_once("\r\n\r\n").ok_or_else(|| {
@@ -838,6 +842,43 @@ paths_bytes_received{name="main",state="ready"} 1000
         assert_eq!(result.stream_metrics.connected_links, 3);
         assert_eq!(result.stream_metrics.input_bitrate_kbps, 4_500);
         assert!((result.stream_metrics.packet_loss_percent - 2.5).abs() < f32::EPSILON);
+    }
+
+    #[tokio::test]
+    async fn rejects_oversized_http_responses() -> Result<(), Box<dyn std::error::Error>> {
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+        };
+
+        let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
+        let port = listener.local_addr()?.port();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await?;
+            let mut request = [0_u8; 1024];
+            let _ = stream.read(&mut request).await?;
+            let body = vec![b'x'; MAX_HTTP_RESPONSE_BYTES + 1];
+            let headers = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            stream.write_all(headers.as_bytes()).await?;
+            stream.write_all(&body).await?;
+            Ok::<(), std::io::Error>(())
+        });
+
+        let endpoint = HttpEndpoint {
+            host: "127.0.0.1".to_string(),
+            port,
+            path: "/metrics".to_string(),
+        };
+        let result = poll_http_text_inner(&endpoint).await;
+        assert!(matches!(
+            result,
+            Err(MetricsError::ResponseTooLarge(limit)) if limit == MAX_HTTP_RESPONSE_BYTES
+        ));
+        server.await??;
+        Ok(())
     }
 }
 

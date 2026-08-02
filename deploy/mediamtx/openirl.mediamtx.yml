@@ -1,15 +1,17 @@
 # Minimal MediaMTX config for OpenIRL relay process supervision.
-# Tune these ports before exposing any relay beyond localhost/VPN.
+# Media listeners stay on loopback by default. Change each media address only
+# with an explicit private-network/VPN boundary and an authenticated ingest
+# policy in front of the listener.
 api: yes
 apiAddress: 127.0.0.1:9997
 metrics: yes
 metricsAddress: 127.0.0.1:9998
 rtmp: yes
-rtmpAddress: :1935
+rtmpAddress: 127.0.0.1:1935
 srt: yes
-srtAddress: :9000
+srtAddress: 127.0.0.1:9000
 webrtc: yes
-webrtcAddress: :8889
+webrtcAddress: 127.0.0.1:8889
 hls: no
 paths:
   all:

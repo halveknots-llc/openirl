@@ -5,8 +5,8 @@ use axum::{
     Json, Router,
     extract::{ConnectInfo, FromRequestParts, Path, Request, State},
     http::{
-        HeaderValue, Method, StatusCode,
-        header::{AUTHORIZATION, CONTENT_TYPE},
+        HeaderMap, HeaderValue, Method, StatusCode,
+        header::{AUTHORIZATION, CONTENT_TYPE, HOST, ORIGIN},
         request::Parts,
     },
     middleware::{self, Next},
@@ -23,7 +23,10 @@ use openirl_artifacts::{
     default_fallback_asset_plan, export_field_report_markdown, export_support_bundle,
     materialize_alpha_source_layout, materialize_fallback_assets, materialize_obs_scene_template,
 };
-use openirl_auth::{AuthPolicy, auth_status, verify_authorization_header};
+use openirl_auth::{
+    AuthPolicy, auth_status, browser_origin_is_allowed, browser_origin_is_same_origin,
+    verify_authorization_header,
+};
 use openirl_config::{
     AppConfig, ConfigValidationReport, MetricsSourceKind, ObsAdapterKind,
     RelayProcessKind as ConfigRelayProcessKind, RelaySupervisorMode, load_config, validate_config,
@@ -1543,13 +1546,26 @@ async fn require_api_auth(State(state): State<ApiState>, request: Request, next:
         return next.run(request).await;
     }
 
+    let same_origin = match browser_request_origin(&state.config, request.headers()) {
+        Ok(same_origin) => same_origin,
+        Err(message) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({
+                    "error": "cross-origin-request-rejected",
+                    "message": message
+                })),
+            )
+                .into_response();
+        }
+    };
     let policy = auth_policy_from_config(&state.config);
     let token_value = std::env::var(&policy.token_env).ok();
     let authorization = request
         .headers()
         .get(AUTHORIZATION)
         .and_then(|value| value.to_str().ok());
-    let is_loopback_request = request_is_loopback(request.extensions(), &state);
+    let is_loopback_request = request_is_loopback(request.extensions(), &state) && same_origin;
     let decision = verify_authorization_header(
         &policy,
         token_value.as_deref(),
@@ -1562,6 +1578,25 @@ async fn require_api_auth(State(state): State<ApiState>, request: Request, next:
     } else {
         (StatusCode::UNAUTHORIZED, Json(serde_json::json!(decision))).into_response()
     }
+}
+
+fn browser_request_origin(config: &AppConfig, headers: &HeaderMap) -> Result<bool, &'static str> {
+    let origin_header = headers.get(ORIGIN);
+    let origin = match origin_header {
+        Some(value) => Some(
+            value
+                .to_str()
+                .map_err(|_| "The browser Origin header is not valid UTF-8.")?,
+        ),
+        None => None,
+    };
+    let host = headers.get(HOST).and_then(|value| value.to_str().ok());
+    if !browser_origin_is_allowed(origin, host, &config.api.cors_allowed_origins) {
+        return Err(
+            "State-changing API requests require a same-origin browser request or an explicitly configured origin with authentication.",
+        );
+    }
+    Ok(browser_origin_is_same_origin(origin, host))
 }
 
 fn request_is_loopback(extensions: &axum::http::Extensions, state: &ApiState) -> bool {
@@ -1583,13 +1618,25 @@ impl FromRequestParts<ApiState> for ControlAuth {
         parts: &mut Parts,
         state: &ApiState,
     ) -> Result<Self, Self::Rejection> {
+        let same_origin = match browser_request_origin(&state.config, &parts.headers) {
+            Ok(value) => value,
+            Err(message) => {
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    Json(serde_json::json!({
+                        "error": "cross-origin-request-rejected",
+                        "message": message
+                    })),
+                ));
+            }
+        };
         let policy = auth_policy_from_config(&state.config);
         let token_value = std::env::var(&policy.token_env).ok();
         let authorization = parts
             .headers
             .get(AUTHORIZATION)
             .and_then(|value| value.to_str().ok());
-        let is_loopback_request = request_is_loopback(&parts.extensions, state);
+        let is_loopback_request = request_is_loopback(&parts.extensions, state) && same_origin;
         let decision = verify_authorization_header(
             &policy,
             token_value.as_deref(),
@@ -3254,5 +3301,36 @@ mod tests {
             support_bundle_api_output_dir("artifacts/support-bundles", Some("/tmp/export".into()))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn browser_origin_guard_allows_same_origin_without_token() {
+        let config = AppConfig::default();
+        let mut headers = HeaderMap::new();
+        headers.insert(HOST, HeaderValue::from_static("127.0.0.1:7707"));
+        headers.insert(ORIGIN, HeaderValue::from_static("http://127.0.0.1:7707"));
+        assert_eq!(browser_request_origin(&config, &headers), Ok(true));
+    }
+
+    #[test]
+    fn browser_origin_guard_rejects_untrusted_cross_origin_requests() {
+        let config = AppConfig::default();
+        let mut headers = HeaderMap::new();
+        headers.insert(HOST, HeaderValue::from_static("127.0.0.1:7707"));
+        headers.insert(ORIGIN, HeaderValue::from_static("https://attacker.example"));
+        assert!(browser_request_origin(&config, &headers).is_err());
+    }
+
+    #[test]
+    fn configured_cross_origin_requires_token_path() {
+        let mut config = AppConfig::default();
+        config.api.cors_allowed_origins = vec!["https://dashboard.example".to_string()];
+        let mut headers = HeaderMap::new();
+        headers.insert(HOST, HeaderValue::from_static("127.0.0.1:7707"));
+        headers.insert(
+            ORIGIN,
+            HeaderValue::from_static("https://dashboard.example"),
+        );
+        assert_eq!(browser_request_origin(&config, &headers), Ok(false));
     }
 }

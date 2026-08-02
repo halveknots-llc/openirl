@@ -142,6 +142,62 @@ pub fn verify_authorization_header(
     }
 }
 
+/// Returns whether a browser origin matches the request Host authority.
+///
+/// A missing origin is treated as a non-browser client. An explicit `null`
+/// origin, malformed origin, or missing Host header is never considered same
+/// origin.
+#[must_use]
+pub fn browser_origin_is_same_origin(origin: Option<&str>, host: Option<&str>) -> bool {
+    let Some(origin) = origin.map(str::trim).filter(|value| !value.is_empty()) else {
+        return true;
+    };
+    let Some(host) = host.map(str::trim).filter(|value| !value.is_empty()) else {
+        return false;
+    };
+    let Some(authority) = origin_authority(origin) else {
+        return false;
+    };
+    !authority.contains('@') && authority.eq_ignore_ascii_case(host)
+}
+
+/// Returns whether a browser origin is same-origin or explicitly configured.
+#[must_use]
+pub fn browser_origin_is_allowed(
+    origin: Option<&str>,
+    host: Option<&str>,
+    allowed_origins: &[String],
+) -> bool {
+    let Some(origin) = origin.map(str::trim).filter(|value| !value.is_empty()) else {
+        return true;
+    };
+    if origin.eq_ignore_ascii_case("null") {
+        return false;
+    }
+    if browser_origin_is_same_origin(Some(origin), host) {
+        return true;
+    }
+    allowed_origins
+        .iter()
+        .any(|allowed| allowed.trim().eq_ignore_ascii_case(origin))
+}
+
+fn origin_authority(origin: &str) -> Option<&str> {
+    let authority = origin
+        .strip_prefix("http://")
+        .or_else(|| origin.strip_prefix("https://"))?
+        .split('/')
+        .next()?;
+    if authority.is_empty()
+        || authority
+            .chars()
+            .any(|character| matches!(character, '?' | '#' | '\\'))
+    {
+        return None;
+    }
+    Some(authority)
+}
+
 fn allow(reason: &str) -> AuthDecision {
     AuthDecision {
         allowed: true,
@@ -217,5 +273,41 @@ mod tests {
             verify_authorization_header(&policy, Some("secret"), Some("Bearer secret"), false);
         assert!(decision.allowed);
         assert_eq!(decision.reason, "token-match");
+    }
+
+    #[test]
+    fn same_origin_matches_request_host() {
+        assert!(browser_origin_is_same_origin(
+            Some("http://127.0.0.1:7707"),
+            Some("127.0.0.1:7707")
+        ));
+        assert!(!browser_origin_is_same_origin(
+            Some("https://example.test"),
+            Some("127.0.0.1:7707")
+        ));
+    }
+
+    #[test]
+    fn cross_origin_requires_explicit_allowlist() {
+        let allowed = vec!["https://dashboard.example.test".to_string()];
+        assert!(browser_origin_is_allowed(
+            Some("https://dashboard.example.test"),
+            Some("127.0.0.1:7707"),
+            &allowed
+        ));
+        assert!(!browser_origin_is_allowed(
+            Some("https://attacker.example.test"),
+            Some("127.0.0.1:7707"),
+            &allowed
+        ));
+    }
+
+    #[test]
+    fn null_origin_is_rejected() {
+        assert!(!browser_origin_is_allowed(
+            Some("null"),
+            Some("127.0.0.1:7707"),
+            &[]
+        ));
     }
 }
