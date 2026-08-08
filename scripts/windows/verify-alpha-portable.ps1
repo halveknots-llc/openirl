@@ -150,7 +150,7 @@ try {
   }
   $desktopPlan = & (Join-Path $packageRoot 'openirl-desktop.exe') plan | ConvertFrom-Json
   Assert-LastExitCode 'Packaged desktop plan check'
-  if (-not $desktopPlan.menu_items -or $desktopPlan.dashboard_url -ne 'http://127.0.0.1:7707/') {
+  if (-not $desktopPlan.tray_menu -or $desktopPlan.dashboard_url -ne 'http://127.0.0.1:7707/') {
     throw 'Packaged desktop plan output is invalid'
   }
 
