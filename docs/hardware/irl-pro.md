@@ -26,6 +26,11 @@ Use the address reachable from the Android device. For field use, prefer environ
 
 ## Evidence
 
+Follow the [public evidence policy](../PUBLIC_EVIDENCE.md): before publishing,
+remove stream credentials, authentication credentials, credential-bearing URLs,
+private network details, local paths, device identifiers, location-sensitive
+media, private-production stream IDs, and raw support bundles.
+
 Record IRL Pro version, Android version, protocol, endpoint host class, accepted profile fields, and whether OpenIRL metrics saw the contribution path. Remove secrets before attaching logs or screenshots.
 
 Submit a reviewed result against the `irl-pro-profile` row using the

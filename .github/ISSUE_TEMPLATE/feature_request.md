@@ -29,6 +29,8 @@ Name any required external tools or devices, such as OBS, MediaMTX, Moblin, IRL 
 
 How should this preserve localhost defaults, auth requirements, redaction, and explicit opt-in for broader network exposure?
 
+- [ ] I followed the [public evidence policy](../../docs/PUBLIC_EVIDENCE.md): remove stream credentials, authentication credentials, credential-bearing URLs, private network details, local paths, device identifiers, location-sensitive media, private-production stream IDs, and raw support bundles.
+
 ## Validation
 
 Which automated checks or live smoke scripts would prove the feature?

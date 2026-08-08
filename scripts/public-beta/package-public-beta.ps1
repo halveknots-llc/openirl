@@ -2,6 +2,8 @@ $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 Set-Location $root
 
+Write-Warning 'public evidence review: remove stream credentials, authentication credentials, credential-bearing URLs, private network details, local paths, device identifiers, location-sensitive media, private-production stream IDs, and raw support bundles'
+
 $status = git status --porcelain --untracked-files=all
 if ($status) {
   throw 'refusing to package a dirty worktree; commit or clean all changes first'

@@ -26,6 +26,11 @@ Replace `127.0.0.1` with the OBS or relay host address reachable from the phone.
 
 ## Evidence
 
+Follow the [public evidence policy](../PUBLIC_EVIDENCE.md): before publishing,
+remove stream credentials, authentication credentials, credential-bearing URLs,
+private network details, local paths, device identifiers, location-sensitive
+media, private-production stream IDs, and raw support bundles.
+
 Record the Moblin version, iOS version, protocol, endpoint host class, and whether the generated profile was accepted. A public field report should remove passphrases, stream IDs that identify a private production setup, and location-adjacent notes.
 
 Submit a reviewed result against the `moblin-profile` row using the

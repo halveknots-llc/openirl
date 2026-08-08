@@ -26,6 +26,7 @@ Start here if you are evaluating, operating, or contributing to OpenIRL.
 ## Contributor Guides
 
 - [Contributor recipes](contributing/README.md): typed synthetic fixtures and focused gates for profiles, relays, metrics, redaction, and live smoke checks.
+- [Public evidence safety](PUBLIC_EVIDENCE.md): required review classes enforced at every public submission surface.
 - [Encoder profile recipe](contributing/encoder-profile.md)
 - [Relay backend recipe](contributing/relay-backend.md)
 - [Metrics parser recipe](contributing/metrics-parser.md)

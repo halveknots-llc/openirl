@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "policy_id": "openirl-public-evidence-v1",
+  "documentation": "docs/PUBLIC_EVIDENCE.md",
+  "required_review_terms": [
+    "stream credentials",
+    "authentication credentials",
+    "credential-bearing URLs",
+    "private network details",
+    "local paths",
+    "device identifiers",
+    "location-sensitive media",
+    "private-production stream IDs",
+    "raw support bundles"
+  ],
+  "surfaces": [
+    ".github/ISSUE_TEMPLATE/bug_report.md",
+    ".github/ISSUE_TEMPLATE/field_report.md",
+    ".github/ISSUE_TEMPLATE/feature_request.md",
+    ".github/pull_request_template.md",
+    "CONTRIBUTING.md",
+    "docs/COMPATIBILITY.md",
+    "docs/PUBLIC_EVIDENCE.md",
+    "docs/hardware/belabox.md",
+    "docs/hardware/irl-pro.md",
+    "docs/hardware/moblin.md",
+    "fixtures/field/compatibility-evidence.template.json",
+    "issue_templates/bug_report.md",
+    "issue_templates/field_report.md",
+    "issue_templates/feature_request.md",
+    "scripts/public-beta/package-public-beta.ps1",
+    "scripts/public-beta/package-public-beta.sh"
+  ]
+}

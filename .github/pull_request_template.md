@@ -51,6 +51,7 @@ Check any live environment that was actually used:
 
 ## Security and Redaction
 
+- [ ] I followed the [public evidence policy](../docs/PUBLIC_EVIDENCE.md): remove stream credentials, authentication credentials, credential-bearing URLs, private network details, local paths, device identifiers, location-sensitive media, private-production stream IDs, and raw support bundles.
 - [ ] This change preserves localhost-first defaults unless broader access is explicitly configured.
 - [ ] This change does not log stream keys, SRT passphrases, dashboard tokens, OBS passwords, private relay credentials, or credential-bearing URLs.
 - [ ] Any attached support bundle, screenshot, fixture, or report has been reviewed for secrets.

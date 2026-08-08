@@ -1,7 +1,7 @@
 //! TOML configuration for OpenIRL.
 
 use openirl_core::{DeploymentMode, SceneBundle, SceneNames};
-use openirl_vault::{redact_command_args, redact_url};
+use openirl_vault::{redact_command_args, redact_local_path, redact_url};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fs, net::SocketAddr, path::Path};
 use thiserror::Error;
@@ -111,14 +111,6 @@ fn redact_artifact_config(artifacts: &mut ArtifactsConfig) {
     artifacts.support_bundles_dir = redact_local_path(&artifacts.support_bundles_dir);
     artifacts.field_reports_dir = redact_local_path(&artifacts.field_reports_dir);
     artifacts.alpha_package_dir = redact_local_path(&artifacts.alpha_package_dir);
-}
-
-fn redact_local_path(value: &str) -> String {
-    if Path::new(value).is_absolute() {
-        "<redacted-local-path>".to_string()
-    } else {
-        value.to_string()
-    }
 }
 
 /// Validation severity for config readiness checks.
