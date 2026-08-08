@@ -60,6 +60,10 @@ The executable checks establish Windows CLI launch behavior. They do not launch
 OBS, MediaMTX, a mobile encoder, BELABOX, SRTLA, a relay host, or contribution
 media.
 
+After the independent report is written, the verifier scans the archive,
+manifest, checksum, and report together. The release job repeats that bounded
+scan and includes the release notes before any file is published.
+
 ## Signed provenance
 
 After verification, trusted `main` and tag workflows use
@@ -84,7 +88,9 @@ reputation. Portable alpha release notes must keep that distinction explicit.
 Pull requests build and independently verify the package but cannot request an
 OIDC signing certificate. A tag matching `v<workspace-version>` may publish a
 prerelease only when the tag commit is reachable from `origin/main`, package
-verification passes, and provenance succeeds.
+verification passes, and provenance succeeds. Immediately before publication,
+the release job fetches the tag again and requires its peeled commit to equal
+the exact workflow revision used to build, verify, and attest the package.
 
 Release notes name every live integration exercised by the workflow. The
 current automated release path marks OBS, MediaMTX, mobile encoders, BELABOX,

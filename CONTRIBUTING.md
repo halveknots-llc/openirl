@@ -15,7 +15,12 @@ OpenIRL welcomes practical contributions that make local-first IRL production sa
 
 ## Development Setup
 
-Install the Rust toolchain named in `rust-toolchain.toml`, then run:
+Install the Rust toolchain named in `rust-toolchain.toml` and the hash-pinned
+Python validation dependency, then run:
+
+```bash
+python3 -m pip install --only-binary=:all: --require-hashes -r requirements/static-validation.txt
+```
 
 ```bash
 python3 scripts/static_validate.py
@@ -45,6 +50,11 @@ smallest focused gate, relevant operator documentation, and the point where a
 real external dependency becomes mandatory.
 
 ## Pull Request Expectations
+
+Follow the [public evidence policy](docs/PUBLIC_EVIDENCE.md): before publishing,
+remove stream credentials, authentication credentials, credential-bearing URLs,
+private network details, local paths, device identifiers, location-sensitive
+media, private-production stream IDs, and raw support bundles.
 
 - Keep changes focused and explain the operator impact.
 - Keep docs, CLI commands, API behavior, and validation scripts aligned.

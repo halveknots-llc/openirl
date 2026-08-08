@@ -251,7 +251,7 @@ Write-Utf8NoBom $checksumPath "$zipHash  openirl-windows-portable-alpha.zip`n"
 $externalManifest = Join-Path $outFull 'openirl-windows-portable-alpha.manifest.json'
 Copy-Item $manifestPath $externalManifest -Force
 
-python scripts\security\release-artifact-scan.py --archive $zip --manifest $externalManifest --forbid-local-root $root
+python scripts\security\release-artifact-scan.py --archive $zip --manifest $externalManifest --scan-file $checksumPath --forbid-local-root $root
 Assert-LastExitCode 'Release artifact secret scan'
 
 Write-Host "Portable alpha created: $zip"

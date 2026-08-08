@@ -41,6 +41,18 @@ fn main() -> Result<()> {
 
 fn ci() -> Result<()> {
     let python = python_command();
+    run(
+        python,
+        &[
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "scripts/tests",
+            "-p",
+            "test_*.py",
+        ],
+    )?;
     run(python, &["scripts/static_validate.py"])?;
     run(python, &["scripts/audit/handoff_audit.py"])?;
     run(python, &["scripts/security/security-audit-smoke.py"])?;
