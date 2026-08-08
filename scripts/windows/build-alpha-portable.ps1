@@ -16,11 +16,13 @@ function Assert-LastExitCode([string]$Description) {
   }
 }
 
-function Assert-CleanWorktree {
-  $status = @(git status --porcelain=v1 --untracked-files=all)
+function Assert-CleanWorktree([string]$Stage) {
+  $status = @(git -c core.quotepath=true status --porcelain=v1 --untracked-files=all)
   Assert-LastExitCode 'Git worktree inspection'
   if ($status.Count -ne 0) {
-    throw 'Release packaging requires a clean worktree with no tracked or untracked changes'
+    $visible = @($status | Select-Object -First 20) -join '; '
+    $suffix = if ($status.Count -gt 20) { '; additional paths omitted' } else { '' }
+    throw "Release packaging requires a clean worktree at $Stage; detected $($status.Count) tracked or untracked path(s): $visible$suffix"
   }
 }
 
@@ -101,7 +103,7 @@ if (-not $outFull.StartsWith($requiredPrefix, [System.StringComparison]::Ordinal
   throw 'OutDir must resolve beneath the repository dist directory'
 }
 
-Assert-CleanWorktree
+Assert-CleanWorktree 'pre-validation'
 git fsck --full --no-progress
 Assert-LastExitCode 'Git object verification'
 
@@ -116,7 +118,7 @@ if ($ExpectedRevision -and $revision -ne $ExpectedRevision.Trim().ToLowerInvaria
 
 cargo xtask ci
 Assert-LastExitCode 'OpenIRL source validation'
-Assert-CleanWorktree
+Assert-CleanWorktree 'post-validation'
 
 if ($env:RUSTFLAGS -or $env:CARGO_ENCODED_RUSTFLAGS) {
   throw 'Release packaging does not accept caller-provided Rust compiler flags'
@@ -146,7 +148,7 @@ foreach ($binary in $binarySources) {
     throw "Required package binary is missing: $binary"
   }
 }
-Assert-CleanWorktree
+Assert-CleanWorktree 'post-build'
 
 if (Test-Path $outFull) {
   Remove-Item -Recurse -Force $outFull
