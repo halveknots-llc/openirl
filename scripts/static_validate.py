@@ -6,7 +6,7 @@ import json
 import re
 import tomllib
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Iterator
 
 try:
     import yaml
@@ -32,6 +32,12 @@ MAX_POLICY_FILE_BYTES = 2 * 1024 * 1024
 CONTAINER_DIGEST = re.compile(r"[^@\s]+@sha256:[0-9a-f]{64}")
 EXTERNAL_ACTION = re.compile(
     r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.\-/]+)?@[0-9a-f]{40}"
+)
+UNTRUSTED_RUN_CONTEXT = re.compile(r"\$\{\{\s*github\.(?:ref|ref_name)\s*}}")
+TRUSTED_PUSH_EVENT = re.compile(r"github\.event_name\s*==\s*['\"]push['\"]")
+TRUSTED_RELEASE_REF = re.compile(
+    r"(?:github\.ref\s*==\s*['\"]refs/heads/main['\"]|"
+    r"startsWith\(\s*github\.ref\s*,\s*['\"]refs/tags/v['\"]\s*\))"
 )
 
 Finding = tuple[str, str, str]
@@ -164,6 +170,60 @@ def validate_workflow_containers(location: str, document: Any, findings: list[Fi
                 validate_container_image(location, service, findings)
 
 
+def permission_is_write(permissions: Any, name: str) -> bool:
+    if permissions == "write-all":
+        return True
+    return isinstance(permissions, dict) and permissions.get(name) == "write"
+
+
+def validate_workflow_privilege_boundaries(
+    location: str, document: Any, findings: list[Finding]
+) -> None:
+    if not isinstance(document, dict):
+        return
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return
+    workflow_permissions = document.get("permissions")
+    for job_name, job in jobs.items():
+        if not isinstance(job, dict):
+            continue
+        condition = job.get("if", "")
+        condition_text = condition if isinstance(condition, str) else ""
+        permissions = job.get("permissions", workflow_permissions)
+        privileged = any(
+            permission_is_write(permissions, name)
+            for name in ("attestations", "contents", "id-token")
+        )
+        if privileged and (
+            TRUSTED_PUSH_EVENT.search(condition_text) is None
+            or TRUSTED_RELEASE_REF.search(condition_text) is None
+        ):
+            findings.append(
+                (
+                    location,
+                    "privileged-job-condition",
+                    f"job {job_name} must require a trusted push ref before write permissions",
+                )
+            )
+
+        steps = job.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for index, step in enumerate(steps, 1):
+            if not isinstance(step, dict):
+                continue
+            run = step.get("run")
+            if isinstance(run, str) and UNTRUSTED_RUN_CONTEXT.search(run):
+                findings.append(
+                    (
+                        location,
+                        "run-context-boundary",
+                        f"job {job_name} step {index} must pass ref context through env",
+                    )
+                )
+
+
 def action_references(document: dict[str, Any], document_kind: str) -> list[Any]:
     references: list[Any] = []
     if document_kind == "workflow":
@@ -232,6 +292,7 @@ def validate_actions_policy(root: Path = ROOT) -> list[Finding]:
                 return
             if document_kind == "workflow":
                 validate_workflow_containers(location, document, findings)
+                validate_workflow_privilege_boundaries(location, document, findings)
             elif document_kind == "action":
                 runs = document.get("runs")
                 if isinstance(runs, dict):

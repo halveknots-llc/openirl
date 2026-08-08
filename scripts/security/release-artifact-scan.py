@@ -6,6 +6,7 @@ import argparse
 import json
 import re
 import stat
+import struct
 import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
@@ -14,9 +15,12 @@ MAX_FILES = 2_048
 MAX_FILE_BYTES = 256 * 1024 * 1024
 MAX_TOTAL_BYTES = 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 4 * 1024 * 1024
+MAX_ARCHIVE_BYTES = MAX_TOTAL_BYTES + (16 * 1024 * 1024)
 MAX_COMPRESSION_RATIO = 64
 CHUNK_BYTES = 1024 * 1024
 OVERLAP_BYTES = 512
+ZIP_EOCD_BYTES = 22
+MAX_ZIP_COMMENT_BYTES = 65_535
 
 DENIED_PARTS = {
     ".git",
@@ -49,7 +53,9 @@ SENSITIVE_PATTERNS = (
     (
         "assigned credential",
         re.compile(
-            rb"(?<![A-Za-z0-9])" + SENSITIVE_NAME + rb"\s*[:=]\s*[\"']?[^\s\"'<>]{12,}",
+            rb"(?<![A-Za-z0-9])(?:[\"']\s*)?"
+            + SENSITIVE_NAME
+            + rb"(?:\s*[\"'])?\s*[:=]\s*[\"']?[^\s\"'<>]{12,}",
             re.IGNORECASE,
         ),
     ),
@@ -123,9 +129,14 @@ def scan_bytes(payload: bytes, forbidden: list[bytes]) -> None:
     for marker in forbidden:
         if marker.lower() in lowered:
             raise ArtifactScanError("artifact contains a forbidden local build path")
-    for label, pattern in SENSITIVE_PATTERNS:
-        if pattern.search(payload):
-            raise ArtifactScanError(f"artifact contains a high-confidence {label} pattern")
+    views = [payload]
+    null_count = payload.count(b"\0")
+    if null_count >= 2 and null_count * 8 >= len(payload):
+        views.append(payload.replace(b"\0", b""))
+    for view in views:
+        for label, pattern in SENSITIVE_PATTERNS:
+            if pattern.search(view):
+                raise ArtifactScanError(f"artifact contains a high-confidence {label} pattern")
 
 
 def scan_stream(stream, forbidden: list[bytes]) -> None:
@@ -164,16 +175,51 @@ def scan_public_file(path: Path, forbidden: list[bytes]) -> None:
         scan_stream(stream, forbidden)
 
 
+def inspect_zip_envelope(path: Path) -> tuple[int, bytes]:
+    if path.is_symlink() or not path.is_file():
+        raise ArtifactScanError("archive must be a regular file")
+    size = path.stat().st_size
+    if size < ZIP_EOCD_BYTES or size > MAX_ARCHIVE_BYTES:
+        raise ArtifactScanError("archive size is outside the public release limit")
+
+    tail_size = min(size, ZIP_EOCD_BYTES + MAX_ZIP_COMMENT_BYTES)
+    with path.open("rb") as stream:
+        stream.seek(size - tail_size)
+        tail = stream.read(tail_size)
+    signature = b"PK\x05\x06"
+    for offset in range(len(tail) - ZIP_EOCD_BYTES, -1, -1):
+        if tail[offset : offset + 4] != signature:
+            continue
+        fields = struct.unpack_from("<4s4H2LH", tail, offset)
+        disk_number, central_disk, disk_entries, total_entries = fields[1:5]
+        comment_size = fields[-1]
+        if offset + ZIP_EOCD_BYTES + comment_size != len(tail):
+            continue
+        if disk_number != 0 or central_disk != 0 or disk_entries != total_entries:
+            raise ArtifactScanError("multi-disk archives are not supported")
+        if total_entries == 0 or total_entries > MAX_FILES:
+            raise ArtifactScanError("archive member count is outside the public release limit")
+        return total_entries, tail[offset + ZIP_EOCD_BYTES :]
+    raise ArtifactScanError("archive has an invalid envelope or trailing data")
+
+
 def scan_archive(path: Path, forbidden: list[bytes]) -> tuple[int, int]:
+    declared_members, archive_comment = inspect_zip_envelope(path)
+    scan_bytes(archive_comment, forbidden)
+    with path.open("rb") as stream:
+        scan_stream(stream, forbidden)
+
     total = 0
     seen: set[str] = set()
     with zipfile.ZipFile(path) as archive:
         members = archive.infolist()
-        if not members or len(members) > MAX_FILES:
+        if len(members) != declared_members:
             raise ArtifactScanError("archive member count is outside the public release limit")
         for info in members:
             member_path = validate_member_path(info.filename)
             scan_bytes(info.filename.encode("utf-8"), forbidden)
+            scan_bytes(info.comment, forbidden)
+            scan_bytes(info.extra, forbidden)
             canonical = member_path.as_posix().casefold()
             if canonical in seen:
                 raise ArtifactScanError("archive contains a duplicate platform path")
@@ -211,6 +257,15 @@ def self_test() -> None:
             return
         raise ArtifactScanError(f"self-test accepted unsafe {name} evidence")
 
+    def require_public_file_rejection(root: Path, name: str, payload: bytes) -> None:
+        path = root / name
+        path.write_bytes(payload)
+        try:
+            scan_public_file(path, [])
+        except ArtifactScanError:
+            return
+        raise ArtifactScanError(f"self-test accepted unsafe {name} evidence")
+
     with tempfile.TemporaryDirectory(prefix="openirl-artifact-scan-") as raw_tmp:
         root = Path(raw_tmp)
         manifest = root / "manifest.json"
@@ -243,6 +298,66 @@ def self_test() -> None:
         }
         for name, payload in unsafe_payloads.items():
             require_archive_rejection(root, name, "OpenIRL/review.txt", payload)
+
+        synthetic_canary = b"synthetic-release-canary-12345"
+        require_public_file_rejection(
+            root,
+            "quoted-structured-key.json",
+            b'{"dashboard_token": "' + synthetic_canary + b'"}',
+        )
+        require_public_file_rejection(
+            root,
+            "utf16-assignment.txt",
+            ("dashboard_token=" + synthetic_canary.decode()).encode("utf-16-le"),
+        )
+
+        archive_comment = root / "archive-comment.zip"
+        with zipfile.ZipFile(archive_comment, "w") as archive:
+            archive.writestr("OpenIRL/README.md", "synthetic public artifact")
+            archive.comment = b"dashboard_token=" + synthetic_canary
+        try:
+            scan_archive(archive_comment, [])
+        except ArtifactScanError:
+            pass
+        else:
+            raise ArtifactScanError("self-test accepted unsafe archive comment evidence")
+
+        member_comment = root / "member-comment.zip"
+        info = zipfile.ZipInfo("OpenIRL/README.md")
+        info.comment = b"dashboard_token=" + synthetic_canary
+        with zipfile.ZipFile(member_comment, "w") as archive:
+            archive.writestr(info, "synthetic public artifact")
+        try:
+            scan_archive(member_comment, [])
+        except ArtifactScanError:
+            pass
+        else:
+            raise ArtifactScanError("self-test accepted unsafe member comment evidence")
+
+        member_extra = root / "member-extra.zip"
+        info = zipfile.ZipInfo("OpenIRL/README.md")
+        extra_value = b"dashboard_token=" + synthetic_canary
+        info.extra = struct.pack("<HH", 0xCAFE, len(extra_value)) + extra_value
+        with zipfile.ZipFile(member_extra, "w") as archive:
+            archive.writestr(info, "synthetic public artifact")
+        try:
+            scan_archive(member_extra, [])
+        except ArtifactScanError:
+            pass
+        else:
+            raise ArtifactScanError("self-test accepted unsafe member extra evidence")
+
+        trailing_data = root / "trailing-data.zip"
+        with zipfile.ZipFile(trailing_data, "w") as archive:
+            archive.writestr("OpenIRL/README.md", "synthetic public artifact")
+        with trailing_data.open("ab") as stream:
+            stream.write(b"synthetic trailing bytes")
+        try:
+            scan_archive(trailing_data, [])
+        except ArtifactScanError:
+            pass
+        else:
+            raise ArtifactScanError("self-test accepted trailing archive data")
 
         require_archive_rejection(root, "unsafe-path", "OpenIRL/.env", b"unsafe")
         require_archive_rejection(

@@ -66,17 +66,38 @@ scan and includes the release notes before any file is published.
 
 ## Signed provenance
 
-After verification, trusted `main` and tag workflows use
+After verification, trusted pushes to `main` and version tags use
 `actions/attest-build-provenance` at a reviewed immutable commit. GitHub obtains
 a short-lived Sigstore certificate through OIDC, emits an in-toto SLSA
 provenance statement, and associates it with this public repository. No signing
-key or long-lived credential is stored in the repository.
+key or long-lived credential is stored in the repository. Pull requests and
+manual workflow dispatches can build and verify artifacts, but they cannot
+request provenance credentials or publish a release.
 
-Verify a downloaded artifact with GitHub CLI:
+For a tagged release, authenticate the release first, then verify each downloaded
+file against the expected signer workflow and source tag:
 
-```bash
-gh attestation verify openirl-windows-portable-alpha.zip \
-  --repo halveknots-llc/openirl
+```powershell
+$repo = 'halveknots-llc/openirl'
+$tag = 'v0.1.0-alpha.0'
+$workflow = "$repo/.github/workflows/windows-package.yml"
+
+gh release verify $tag --repo $repo
+if ($LASTEXITCODE -ne 0) { throw 'Release authentication failed' }
+
+$files = @(
+  'openirl-windows-portable-alpha.zip',
+  'openirl-windows-portable-alpha.zip.sha256',
+  'openirl-windows-portable-alpha.manifest.json',
+  'openirl-windows-portable-alpha.verification.json'
+)
+foreach ($file in $files) {
+  gh attestation verify ".\$file" `
+    --repo $repo `
+    --signer-workflow $workflow `
+    --source-ref "refs/tags/$tag"
+  if ($LASTEXITCODE -ne 0) { throw "Provenance verification failed: $file" }
+}
 ```
 
 The attestation signs artifact provenance. It is not an Authenticode publisher
@@ -86,11 +107,14 @@ reputation. Portable alpha release notes must keep that distinction explicit.
 ## Release policy
 
 Pull requests build and independently verify the package but cannot request an
-OIDC signing certificate. A tag matching `v<workspace-version>` may publish a
-prerelease only when the tag commit is reachable from `origin/main`, package
-verification passes, and provenance succeeds. Immediately before publication,
-the release job fetches the tag again and requires its peeled commit to equal
-the exact workflow revision used to build, verify, and attest the package.
+OIDC signing certificate. The repository protects `v*` tags against update and
+deletion and enables immutable releases. A tag matching
+`v<workspace-version>` may publish a prerelease only when the tag commit is
+reachable from `origin/main`, package verification passes, and provenance
+succeeds. Immediately before publication, the release job fetches the tag again
+and requires its peeled commit to equal the exact workflow revision used to
+build, verify, and attest the package. It creates a draft with the complete file
+set and publishes that draft only after every upload succeeds.
 
 Release notes name every live integration exercised by the workflow. The
 current automated release path marks OBS, MediaMTX, mobile encoders, BELABOX,

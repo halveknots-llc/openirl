@@ -18,7 +18,9 @@
 - GitHub Actions, reusable workflow, and Docker image references are parsed as
   YAML and pinned to reviewed immutable commits or image digests, including
   recursively referenced local actions.
-- Trusted branch and tag artifacts receive keyless signed provenance only after independent verification.
+- Only trusted pushes to `main` and protected version tags can receive keyless
+  signed provenance; pull requests and manual dispatches cannot request OIDC
+  signing credentials or publish releases.
 - Dependency-review checks are enabled for pull requests.
 - Container base images are pinned by digest and `.dockerignore` excludes credentials, caches, support bundles, and local metadata.
 - Secret and redaction canaries pass without publishing raw scan output or generated support bundles.
@@ -27,6 +29,12 @@
   the archive, manifests, checksum, verification report, and release notes.
 - A release tag is fetched and re-resolved immediately before publication; its
   commit must still equal the revision whose package and provenance passed.
+- An active `v*` tag ruleset blocks tag updates and deletion, immutable releases
+  are enabled, and the complete release is assembled as a draft before it is
+  published.
+- `gh release verify` authenticates the selected tagged release, and
+  `gh attestation verify` authenticates all four evidence files against the
+  expected signer workflow and exact source tag before local execution.
 - Generated artifact directories and files have owner-only permissions where supported.
 - Default MediaMTX listeners bind to loopback; any LAN, VPN, or public exposure has explicit authentication and network review.
 

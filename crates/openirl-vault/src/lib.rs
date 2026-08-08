@@ -96,22 +96,28 @@ pub fn redact_command_args(args: &[String]) -> Vec<String> {
             continue;
         }
 
-        if let Some((name, separator, _value)) = split_option_value(arg) {
+        if let Some((name, separator, value)) = split_option_value(arg) {
             if sensitive_name(option_name(name)) {
                 redacted.push(format!("{name}{separator}<redacted>"));
-                continue;
+            } else {
+                redacted.push(format!("{name}{separator}{}", redact_command_value(value)));
             }
+            continue;
         } else if is_option(arg) && sensitive_name(option_name(arg)) {
             redacted.push(arg.clone());
             redact_next = true;
             continue;
         }
 
-        let path_safe = redact_local_path(arg);
-        let url_safe = redact_stream_url(&path_safe);
-        redacted.push(redact_support_text(&url_safe, false));
+        redacted.push(redact_command_value(arg));
     }
     redacted
+}
+
+fn redact_command_value(value: &str) -> String {
+    let path_safe = redact_local_path(value);
+    let url_safe = redact_stream_url(&path_safe);
+    redact_support_text(&url_safe, false)
 }
 
 fn is_option(value: &str) -> bool {
@@ -293,7 +299,7 @@ fn scrub_json_value(value: &mut Value, redact_ips: bool) {
             let is_env_pair =
                 map.get("key").and_then(Value::as_str).is_some() && map.contains_key("value");
             for (key, child) in map {
-                if support_bundle_secret_key(key)
+                if support_bundle_secret_key(key, child)
                     || (is_env_pair && key == "value")
                     || (support_bundle_path_key(key) && child.as_str().is_some_and(is_private_path))
                 {
@@ -315,9 +321,15 @@ fn scrub_json_value(value: &mut Value, redact_ips: bool) {
     }
 }
 
-fn support_bundle_secret_key(key: &str) -> bool {
+fn support_bundle_secret_key(key: &str, value: &Value) -> bool {
     let key = key.to_ascii_lowercase().replace('-', "_");
-    if key.ends_with("_env") || key.contains("without_token") {
+    if key.ends_with("_env") {
+        return false;
+    }
+    if value.is_boolean()
+        && (matches!(key.as_str(), "without_token" | "withouttoken")
+            || key.ends_with("_without_token"))
+    {
         return false;
     }
 
@@ -587,6 +599,28 @@ mod tests {
     }
 
     #[test]
+    fn command_arguments_redact_inline_private_paths_cross_platform() {
+        let args = vec![
+            "--config=/Users/operator/private.toml".to_string(),
+            r"--config=C:\Users\operator\private.toml".to_string(),
+            r"/config:\\server\share\private.toml".to_string(),
+            "--config=config/openirl.example.toml".to_string(),
+            "--endpoint=https://relay.example/status?view=summary".to_string(),
+        ];
+
+        assert_eq!(
+            redact_command_args(&args),
+            vec![
+                "--config=<redacted-local-path>",
+                "--config=<redacted-local-path>",
+                "<redacted-local-path>",
+                "--config=config/openirl.example.toml",
+                "--endpoint=https://relay.example/status?view=summary",
+            ]
+        );
+    }
+
+    #[test]
     fn redacts_path_based_stream_credentials() {
         let redacted = redact_stream_url("rtmp://relay.example/live/path-secret");
         assert_eq!(redacted, "rtmp://relay.example/live/<redacted>");
@@ -640,12 +674,20 @@ mod tests {
         let payload = serde_json::json!({
             "dashboard_token": "super-secret",
             "dashboard_token_env": "OPENIRL_DASHBOARD_TOKEN",
+            "without_token": true,
+            "allow_loopback_without_token": true,
+            "without_token_password": "synthetic-sensitive-canary",
+            "nested": {"without_token": "synthetic-sensitive-canary"},
             "note": "OBS password = obs-password-canary",
             "host": "10.23.45.67"
         });
         let redacted = scrub_support_bundle_value(payload, true);
         assert_eq!(redacted["dashboard_token"], "<redacted>");
         assert_eq!(redacted["dashboard_token_env"], "OPENIRL_DASHBOARD_TOKEN");
+        assert_eq!(redacted["without_token"], true);
+        assert_eq!(redacted["allow_loopback_without_token"], true);
+        assert_eq!(redacted["without_token_password"], "<redacted>");
+        assert_eq!(redacted["nested"]["without_token"], "<redacted>");
         assert_eq!(redacted["note"], "OBS password = <redacted>");
         assert_eq!(redacted["host"], "<redacted-ip>");
     }

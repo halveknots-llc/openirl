@@ -78,7 +78,7 @@ The source package also includes live smoke scripts for OBS, MediaMTX, relay, mo
 ### 1. Install Prerequisites
 
 - Rust toolchain from [rust-toolchain.toml](rust-toolchain.toml)
-- Python 3.8 or newer with the hash-pinned static-validation dependency:
+- Python 3.11 or newer with the hash-pinned static-validation dependency:
   `python3 -m pip install --only-binary=:all: --require-hashes -r requirements/static-validation.txt`
 - OBS Studio with OBS WebSocket enabled for live OBS checks
 - MediaMTX when running local ingest checks
