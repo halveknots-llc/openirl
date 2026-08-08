@@ -38,6 +38,7 @@ Attach reviewed, redacted excerpts only:
 
 ## Validation Boundary
 
+- [ ] I followed the [public evidence policy](../../docs/PUBLIC_EVIDENCE.md): remove stream credentials, authentication credentials, credential-bearing URLs, private network details, local paths, device identifiers, location-sensitive media, private-production stream IDs, and raw support bundles.
 - [ ] This report came from a real live dependency environment.
 - [ ] I identified which tools and devices were used.
 - [ ] I recorded exact dependency, host, and OpenIRL versions.

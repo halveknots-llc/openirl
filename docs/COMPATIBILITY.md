@@ -57,6 +57,11 @@ integration-or-higher claims without concrete versions, hosts, and evidence.
 
 ## Contribute field evidence
 
+Follow the [public evidence policy](PUBLIC_EVIDENCE.md): before publishing,
+remove stream credentials, authentication credentials, credential-bearing URLs,
+private network details, local paths, device identifiers, location-sensitive
+media, private-production stream IDs, and raw support bundles.
+
 1. Start from [`fixtures/field/compatibility-evidence.template.json`](../fixtures/field/compatibility-evidence.template.json).
 2. Record exact public versions, host platform, OpenIRL commit, configuration class, and repository-relative smoke command.
 3. Run the named real dependency and report the narrow result that actually occurred.

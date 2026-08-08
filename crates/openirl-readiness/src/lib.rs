@@ -1,8 +1,6 @@
 //! Scoped readiness reports and deterministic first-run demo evidence.
 
-use openirl_config::{
-    AppConfig, MetricsSourceKind, ObsAdapterKind, RedactedAppConfig, RelaySupervisorMode,
-};
+use openirl_config::{AppConfig, MetricsSourceKind, ObsAdapterKind, RelaySupervisorMode};
 use openirl_core::{EncoderKind, HealthDecision, Protocol, StreamMetrics};
 use openirl_health::{HealthEngine, HealthError};
 use openirl_metrics::{MetricsScenario, RelayMetricsSnapshot, simulated_relay_snapshot};
@@ -37,6 +35,45 @@ pub enum RuntimeMode {
     Standard,
     /// Deterministic, local-only first-run demonstration.
     Demo,
+}
+
+/// Network exposure represented without disclosing a configured address or port.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ListenerExposure {
+    /// Bound to a loopback interface with LAN access disabled.
+    LoopbackOnly,
+    /// LAN access was explicitly enabled.
+    LanOptIn,
+    /// A non-loopback bind was configured without the LAN opt-in flag.
+    NonLoopback,
+}
+
+/// Share-safe readiness configuration containing roles and state, never endpoint identities.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ReadinessConfigSummary {
+    /// API listener exposure class.
+    pub api_listener: ListenerExposure,
+    /// Whether dashboard authentication is enabled.
+    pub dashboard_auth_enabled: bool,
+    /// Whether broader-than-loopback access requires authentication.
+    pub auth_required_outside_loopback: bool,
+    /// Number of explicitly allowed browser origins, without origin values.
+    pub allowed_origin_count: usize,
+    /// OBS integration mode, without host or port.
+    pub obs_adapter: ObsAdapterKind,
+    /// Whether relay behavior is enabled.
+    pub relay_enabled: bool,
+    /// Relay supervision mode, without commands, paths, or endpoints.
+    pub relay_supervisor_mode: RelaySupervisorMode,
+    /// Number of enabled relay processes.
+    pub enabled_relay_process_count: usize,
+    /// Whether metrics ingestion is enabled.
+    pub metrics_enabled: bool,
+    /// Metrics source kind, without service URLs.
+    pub metrics_source: MetricsSourceKind,
+    /// Whether every configured artifact destination is nonempty.
+    pub artifact_destinations_configured: bool,
 }
 
 /// Evidence scope. Results from one scope never imply another scope passed.
@@ -186,8 +223,8 @@ pub struct ReadinessReport {
     pub report_revision: u16,
     /// Runtime mode.
     pub mode: RuntimeMode,
-    /// Dashboard-safe configuration snapshot.
-    pub config: RedactedAppConfig,
+    /// Share-safe configuration summary without private topology or paths.
+    pub config: ReadinessConfigSummary,
     /// Scoped checks.
     pub checks: Vec<ReadinessCheck>,
     /// Counts by proof boundary.
@@ -285,7 +322,7 @@ pub fn build_readiness_report(
             "Configuration safety validation",
             "openirl-agent readiness",
             if validation.ok {
-                "The redacted configuration has no blocking validation findings."
+                "The share-safe configuration summary has no blocking validation findings."
             } else {
                 "Resolve blocking configuration findings before serving the agent."
             },
@@ -347,7 +384,7 @@ pub fn build_readiness_report(
         schema_revision,
         report_revision: READINESS_REPORT_REVISION,
         mode,
-        config: config.redacted(),
+        config: readiness_config_summary(config),
         checks,
         summary,
         demo,
@@ -360,6 +397,43 @@ pub fn build_readiness_report(
                 .to_string(),
         ],
     })
+}
+
+fn readiness_config_summary(config: &AppConfig) -> ReadinessConfigSummary {
+    let api_listener = if config.api.allow_lan {
+        ListenerExposure::LanOptIn
+    } else if config.api.bind.ip().is_loopback() {
+        ListenerExposure::LoopbackOnly
+    } else {
+        ListenerExposure::NonLoopback
+    };
+    let artifact_destinations_configured = [
+        config.artifacts.fallback_assets_dir.as_str(),
+        config.artifacts.obs_templates_dir.as_str(),
+        config.artifacts.support_bundles_dir.as_str(),
+        config.artifacts.field_reports_dir.as_str(),
+        config.artifacts.alpha_package_dir.as_str(),
+    ]
+    .iter()
+    .all(|value| !value.trim().is_empty());
+    ReadinessConfigSummary {
+        api_listener,
+        dashboard_auth_enabled: config.security.dashboard_auth_enabled,
+        auth_required_outside_loopback: config.security.require_auth_outside_localhost,
+        allowed_origin_count: config.api.cors_allowed_origins.len(),
+        obs_adapter: config.obs.adapter,
+        relay_enabled: config.relay.enabled,
+        relay_supervisor_mode: config.relay.supervisor_mode,
+        enabled_relay_process_count: config
+            .relay
+            .processes
+            .iter()
+            .filter(|process| process.enabled)
+            .count(),
+        metrics_enabled: config.metrics.enabled,
+        metrics_source: config.metrics.source,
+        artifact_destinations_configured,
+    }
 }
 
 fn build_demo_evidence() -> Result<DemoEvidence, ReadinessError> {
@@ -509,6 +583,39 @@ mod tests {
         assert_eq!(report.summary.source.satisfied, 0);
         assert_eq!(report.summary.live_environment.satisfied, 0);
         assert!(report.demo.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn readiness_config_omits_private_topology_paths_and_credentials()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut config = AppConfig::default();
+        config.obs.host = "private-obs.internal".to_string();
+        config.ingest.public_host = "private-ingest.internal".to_string();
+        config.relay.mediamtx_api_url =
+            "http://operator:synthetic-password@private-router.internal:9997/api".to_string();
+        config.metrics.mediamtx_metrics_url =
+            "http://private-metrics.internal:9998/metrics?accessToken=synthetic-token".to_string();
+        config.relay.processes[0].working_dir = Some(r"C:\\Users\\operator\\OpenIRL".to_string());
+        config.artifacts.support_bundles_dir = r"\\private-share\openirl\support".to_string();
+
+        let report = build_readiness_report(&config, 38, RuntimeMode::Standard, false)?;
+        let serialized = serde_json::to_string(&report)?;
+        for private_value in [
+            "private-obs.internal",
+            "private-ingest.internal",
+            "private-router.internal",
+            "private-metrics.internal",
+            "synthetic-password",
+            "synthetic-token",
+            "operator",
+            "private-share",
+        ] {
+            assert!(!serialized.contains(private_value));
+        }
+        assert_eq!(report.config.api_listener, ListenerExposure::LoopbackOnly);
+        assert_eq!(report.config.obs_adapter, config.obs.adapter);
+        assert_eq!(report.config.metrics_source, config.metrics.source);
         Ok(())
     }
 }

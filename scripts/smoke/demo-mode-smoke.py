@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import secrets
 import socket
 import subprocess
 import sys
@@ -12,6 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CARGO = ["cargo", "run", "--quiet", "--package", "openirl-agent", "--"]
+MAX_RESPONSE_BYTES = 1024 * 1024
 
 
 def parse_cli_readiness() -> None:
@@ -36,22 +38,29 @@ def get(port: int, path: str) -> tuple[int, bytes]:
     try:
         connection.request("GET", path)
         response = connection.getresponse()
-        return response.status, response.read()
+        content_length = response.getheader("Content-Length")
+        if content_length is not None and int(content_length) > MAX_RESPONSE_BYTES:
+            raise AssertionError(f"{path} exceeds the response size limit")
+        body = response.read(MAX_RESPONSE_BYTES + 1)
+        if len(body) > MAX_RESPONSE_BYTES:
+            raise AssertionError(f"{path} exceeds the response size limit")
+        return response.status, body
     finally:
         connection.close()
 
 
-def wait_for_demo(process: subprocess.Popen[str], port: int) -> None:
+def wait_for_demo(process: subprocess.Popen[str], port: int, instance_id: str) -> None:
     deadline = time.monotonic() + 45
     while time.monotonic() < deadline:
         if process.poll() is not None:
             stdout, stderr = process.communicate()
             raise AssertionError(f"demo exited before readiness check: {stdout}{stderr}")
         try:
-            status, _body = get(port, "/health")
-            if status == 200:
+            status, body = get(port, "/health")
+            health = json.loads(body)
+            if status == 200 and health.get("instance_id") == instance_id:
                 return
-        except OSError:
+        except (OSError, json.JSONDecodeError):
             time.sleep(0.1)
     raise AssertionError("demo did not become ready")
 
@@ -61,15 +70,27 @@ def assert_demo_server() -> None:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
 
+    instance_id = secrets.token_hex(24)
     process = subprocess.Popen(
-        [*CARGO, "demo", "--bind", f"127.0.0.1:{port}"],
+        [
+            *CARGO,
+            "demo",
+            "--bind",
+            f"127.0.0.1:{port}",
+            "--instance-id",
+            instance_id,
+        ],
         cwd=ROOT,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
     try:
-        wait_for_demo(process, port)
+        wait_for_demo(process, port, instance_id)
+        status, body = get(port, "/health")
+        health = json.loads(body)
+        if status != 200 or health.get("instance_id") != instance_id:
+            raise AssertionError("demo health response did not identify the launched process")
         status, body = get(port, "/api/readiness")
         if status != 200:
             raise AssertionError(f"demo readiness returned HTTP {status}")

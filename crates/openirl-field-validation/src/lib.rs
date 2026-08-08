@@ -7,9 +7,9 @@
 
 use openirl_core::{EncoderKind, HealthState, Protocol, SceneRole};
 use openirl_readiness::EvidenceMaturity;
-use openirl_vault::redact_support_text;
+use openirl_vault::{is_repository_relative_path, redact_support_text};
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, path::Path};
+use std::collections::BTreeSet;
 use time::{Date, Month, OffsetDateTime};
 
 /// Field-validation stage.
@@ -339,7 +339,7 @@ pub fn build_compatibility_matrix(
                 "not-recorded",
                 "not-recorded",
                 "obs-websocket-v5-source-contract",
-                "scripts/obs/reconcile-smoke.sh or .ps1",
+                "scripts/obs/reconcile-smoke.sh",
                 EvidenceMaturity::SourceValidated,
                 CompatibilityResult::Passed,
                 "crates/openirl-obs/src/lib.rs",
@@ -352,7 +352,7 @@ pub fn build_compatibility_matrix(
                 "not-recorded",
                 "not-recorded",
                 "loopback-srt-listener-source-contract",
-                "scripts/ingest/local-ingest-smoke.sh or .ps1",
+                "scripts/ingest/local-ingest-smoke.sh",
                 EvidenceMaturity::SourceValidated,
                 CompatibilityResult::Passed,
                 "deploy/mediamtx/openirl.mediamtx.yml",
@@ -365,7 +365,7 @@ pub fn build_compatibility_matrix(
                 "not-recorded",
                 "not-recorded",
                 "loopback-rtmp-listener-plan",
-                "scripts/ingest/local-ingest-smoke.sh or .ps1",
+                "scripts/ingest/local-ingest-smoke.sh",
                 EvidenceMaturity::Modeled,
                 CompatibilityResult::NotRun,
                 "not-run",
@@ -378,7 +378,7 @@ pub fn build_compatibility_matrix(
                 "not-recorded",
                 "not-recorded",
                 "moblin-srt-srtla-profile-contract",
-                "scripts/mobile/profile-compat-smoke.sh or .ps1",
+                "scripts/mobile/profile-compat-smoke.sh",
                 EvidenceMaturity::SourceValidated,
                 CompatibilityResult::Passed,
                 "presets/encoders/moblin-srt.json",
@@ -391,7 +391,7 @@ pub fn build_compatibility_matrix(
                 "not-recorded",
                 "not-recorded",
                 "irl-pro-srt-srtla-profile-contract",
-                "scripts/mobile/profile-compat-smoke.sh or .ps1",
+                "scripts/mobile/profile-compat-smoke.sh",
                 EvidenceMaturity::SourceValidated,
                 CompatibilityResult::Passed,
                 "presets/encoders/irl-pro-srt.json",
@@ -404,7 +404,7 @@ pub fn build_compatibility_matrix(
                 "not-recorded",
                 "not-recorded",
                 "larix-srt-profile-contract",
-                "scripts/mobile/profile-compat-smoke.sh or .ps1",
+                "scripts/mobile/profile-compat-smoke.sh",
                 EvidenceMaturity::SourceValidated,
                 CompatibilityResult::Passed,
                 "presets/encoders/larix-srt.json",
@@ -417,7 +417,7 @@ pub fn build_compatibility_matrix(
                 "not-recorded",
                 "not-recorded",
                 "belabox-srtla2-profile-contract",
-                "scripts/mobile/profile-compat-smoke.sh or .ps1",
+                "scripts/mobile/profile-compat-smoke.sh",
                 EvidenceMaturity::SourceValidated,
                 CompatibilityResult::Passed,
                 "presets/encoders/belabox-srtla2.json",
@@ -443,7 +443,7 @@ pub fn build_compatibility_matrix(
                 "0.1.0-alpha.0",
                 "deterministic-local-runtime",
                 "fixed-health-scenario-v1",
-                "python3 scripts/smoke/demo-mode-smoke.py",
+                "scripts/smoke/demo-mode-smoke.py",
                 EvidenceMaturity::LocalRuntimeValidated,
                 CompatibilityResult::Passed,
                 "fixtures/metrics/brownout-v2-scenarios.json",
@@ -469,7 +469,7 @@ pub fn build_compatibility_matrix(
                 "0.1.0-alpha.0",
                 "deterministic-local-runtime",
                 "fixed-health-scenario-v1",
-                "cargo test --package openirl-health",
+                "scripts/smoke/demo-mode-smoke.py",
                 EvidenceMaturity::LocalRuntimeValidated,
                 CompatibilityResult::Passed,
                 "crates/openirl-health/src/lib.rs",
@@ -583,20 +583,26 @@ pub fn validate_compatibility_matrix(
         if row.result == CompatibilityResult::Passed && row.maturity == EvidenceMaturity::Modeled {
             errors.push(format!("row {} cannot pass at modeled maturity", row.id));
         }
-        if Path::new(&row.artifact_reference).is_absolute()
-            || row.artifact_reference.split('/').any(|part| part == "..")
-        {
+        if !is_repository_relative_path(&row.smoke_script) {
+            errors.push(format!(
+                "row {} smoke_script must be public and repository-relative",
+                row.id
+            ));
+        }
+        if !is_repository_relative_path(&row.artifact_reference) {
             errors.push(format!(
                 "row {} artifact_reference must be public and repository-relative",
                 row.id
             ));
         }
         let public_text = format!(
-            "{} {} {} {} {} {} {} {}",
+            "{} {} {} {} {} {} {} {} {} {}",
+            row.id,
             row.workflow,
             row.dependency,
             row.dependency_version,
             row.host_platform,
+            row.openirl_revision,
             row.configuration_class,
             row.smoke_script,
             row.artifact_reference,
@@ -1124,6 +1130,43 @@ mod tests {
         let validation = validate_compatibility_matrix(&matrix);
         assert!(!validation.ok);
         assert!(validation.errors.len() >= 3);
+    }
+
+    #[test]
+    fn compatibility_matrix_checks_every_public_field_and_path_portably() {
+        let baseline = build_compatibility_matrix(38, "a".repeat(40), "2026-08-01");
+
+        let mut unsafe_id = baseline.clone();
+        unsafe_id.rows[0].id = "dashboard_token=synthetic-id-canary".to_string();
+        let report = validate_compatibility_matrix(&unsafe_id);
+        assert!(
+            report
+                .errors
+                .iter()
+                .any(|error| error.contains("sensitive public evidence"))
+        );
+
+        for unsafe_path in [
+            "/Users/operator/private-evidence.json",
+            r"C:\\Users\\operator\\private-evidence.json",
+            r"\\server\share\private-evidence.json",
+            "../private-evidence.json",
+            r"..\private-evidence.json",
+        ] {
+            let mut unsafe_artifact = baseline.clone();
+            unsafe_artifact.rows[0].artifact_reference = unsafe_path.to_string();
+            let report = validate_compatibility_matrix(&unsafe_artifact);
+            assert!(report.errors.iter().any(|error| {
+                error.contains("artifact_reference must be public and repository-relative")
+            }));
+
+            let mut unsafe_smoke = baseline.clone();
+            unsafe_smoke.rows[0].smoke_script = unsafe_path.to_string();
+            let report = validate_compatibility_matrix(&unsafe_smoke);
+            assert!(report.errors.iter().any(|error| {
+                error.contains("smoke_script must be public and repository-relative")
+            }));
+        }
     }
 
     #[test]

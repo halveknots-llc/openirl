@@ -11,10 +11,14 @@
   "result": "not-run",
   "artifact_reference": "artifacts/field/reviewed-evidence.json",
   "notes": "Summarize observable behavior and its limits",
+  "public_evidence_policy": "Before publishing, remove stream credentials, authentication credentials, credential-bearing URLs, private network details, local paths, device identifiers, location-sensitive media, private-production stream IDs, and raw support bundles.",
   "public_review": {
     "credentials_removed": false,
     "private_network_details_removed": false,
+    "local_paths_removed": false,
+    "device_identifiers_removed": false,
     "location_sensitive_media_removed": false,
+    "private_production_stream_ids_removed": false,
     "raw_support_bundle_not_attached": false
   }
 }

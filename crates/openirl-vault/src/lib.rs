@@ -7,7 +7,7 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::{path::Path, sync::OnceLock};
+use std::sync::OnceLock;
 
 /// Local secret reference. This is not a full vault yet.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,18 +67,19 @@ pub fn redact_url(input: &str) -> String {
         .map_or((without_userinfo.as_str(), None), |(before, fragment)| {
             (before, Some(fragment))
         });
-    let Some((base, query)) = before_fragment.split_once('?') else {
-        return without_userinfo;
+    let mut output = if let Some((base, query)) = before_fragment.split_once('?') {
+        let redacted_query = query
+            .split('&')
+            .map(redact_query_pair)
+            .collect::<Vec<_>>()
+            .join("&");
+        format!("{base}?{redacted_query}")
+    } else {
+        before_fragment.to_string()
     };
-    let redacted_query = query
-        .split('&')
-        .map(redact_query_pair)
-        .collect::<Vec<_>>()
-        .join("&");
-    let mut output = format!("{base}?{redacted_query}");
     if let Some(fragment) = fragment {
         output.push('#');
-        output.push_str(fragment);
+        output.push_str(&redact_fragment(fragment));
     }
     output
 }
@@ -95,20 +96,43 @@ pub fn redact_command_args(args: &[String]) -> Vec<String> {
             continue;
         }
 
-        if let Some((name, _value)) = arg.split_once('=') {
-            if sensitive_name(name.trim_start_matches('-')) {
-                redacted.push(format!("{name}=<redacted>"));
+        if let Some((name, separator, _value)) = split_option_value(arg) {
+            if sensitive_name(option_name(name)) {
+                redacted.push(format!("{name}{separator}<redacted>"));
                 continue;
             }
-        } else if arg.starts_with('-') && sensitive_name(arg.trim_start_matches('-')) {
+        } else if is_option(arg) && sensitive_name(option_name(arg)) {
             redacted.push(arg.clone());
             redact_next = true;
             continue;
         }
 
-        redacted.push(redact_stream_url(arg));
+        let path_safe = redact_local_path(arg);
+        let url_safe = redact_stream_url(&path_safe);
+        redacted.push(redact_support_text(&url_safe, false));
     }
     redacted
+}
+
+fn is_option(value: &str) -> bool {
+    value.starts_with('-') || (value.starts_with('/') && !value[1..].contains(['/', '\\']))
+}
+
+fn option_name(value: &str) -> &str {
+    value.trim_start_matches(['-', '/'])
+}
+
+fn split_option_value(value: &str) -> Option<(&str, char, &str)> {
+    if !is_option(value) {
+        return None;
+    }
+    let index = value.find(['=', ':'])?;
+    let separator = value[index..].chars().next()?;
+    Some((
+        &value[..index],
+        separator,
+        &value[index + separator.len_utf8()..],
+    ))
 }
 
 fn redact_url_userinfo(input: &str) -> String {
@@ -142,22 +166,118 @@ fn redact_query_pair(pair: &str) -> String {
     }
 }
 
+fn redact_fragment(fragment: &str) -> String {
+    let redacted = fragment
+        .split('&')
+        .map(redact_query_pair)
+        .collect::<Vec<_>>()
+        .join("&");
+    if redacted != fragment {
+        return redacted;
+    }
+    if let Some((name, _value)) = fragment.split_once(':') {
+        if sensitive_name(&percent_decode_str(name).decode_utf8_lossy()) {
+            return format!("{name}:<redacted>");
+        }
+    }
+    if fragment
+        .trim_start()
+        .to_ascii_lowercase()
+        .starts_with("bearer ")
+    {
+        return "<redacted-fragment>".to_string();
+    }
+    fragment.to_string()
+}
+
 fn sensitive_name(value: &str) -> bool {
-    let normalized = value.trim().to_ascii_lowercase().replace(['-', '.'], "_");
-    if normalized.ends_with("_env") || normalized.contains("without_token") {
+    let tokens = normalized_name_tokens(value);
+    if tokens.last().is_some_and(|token| token == "env") || tokens == ["without", "token"] {
         return false;
     }
-    let compact = normalized.replace('_', "");
-    matches!(
-        normalized.as_str(),
-        "auth" | "authorization" | "key" | "secret" | "signature" | "token"
-    ) || normalized.contains("password")
-        || normalized.contains("passphrase")
-        || normalized.ends_with("_secret")
-        || normalized.ends_with("_token")
-        || compact.contains("streamkey")
-        || compact.contains("apikey")
-        || compact.contains("privatekey")
+    tokens.iter().any(|token| {
+        matches!(
+            token.as_str(),
+            "auth"
+                | "authorization"
+                | "credential"
+                | "credentials"
+                | "key"
+                | "password"
+                | "passphrase"
+                | "secret"
+                | "signature"
+                | "token"
+        )
+    })
+}
+
+fn normalized_name_tokens(value: &str) -> Vec<String> {
+    let characters = value.trim().chars().collect::<Vec<_>>();
+    let mut normalized = String::with_capacity(value.len());
+    for (index, character) in characters.iter().copied().enumerate() {
+        if !character.is_ascii_alphanumeric() {
+            if !normalized.ends_with(' ') {
+                normalized.push(' ');
+            }
+            continue;
+        }
+        let previous = index.checked_sub(1).and_then(|item| characters.get(item));
+        let next = characters.get(index + 1);
+        let starts_word = character.is_ascii_uppercase()
+            && (previous.is_some_and(|item| item.is_ascii_lowercase() || item.is_ascii_digit())
+                || (previous.is_some_and(|item| item.is_ascii_uppercase())
+                    && next.is_some_and(|item| item.is_ascii_lowercase())));
+        if starts_word && !normalized.ends_with(' ') {
+            normalized.push(' ');
+        }
+        normalized.push(character.to_ascii_lowercase());
+    }
+    normalized
+        .split_ascii_whitespace()
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+/// Returns true when a string uses private or host-specific path syntax.
+#[must_use]
+pub fn is_private_path(value: &str) -> bool {
+    let value = value.trim();
+    if value.is_empty() {
+        return false;
+    }
+    let bytes = value.as_bytes();
+    if value.starts_with(['/', '\\', '~'])
+        || (bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':')
+    {
+        return true;
+    }
+    value.split(['/', '\\']).any(|component| component == "..")
+}
+
+/// Redacts private path syntax without resolving or accessing the path.
+#[must_use]
+pub fn redact_local_path(value: &str) -> String {
+    if is_private_path(value) {
+        "<redacted-local-path>".to_string()
+    } else {
+        value.to_string()
+    }
+}
+
+/// Validates a portable repository-relative evidence path lexically.
+#[must_use]
+pub fn is_repository_relative_path(value: &str) -> bool {
+    !value.is_empty()
+        && value == value.trim()
+        && !is_private_path(value)
+        && !value.contains(['\\', ':'])
+        && !value
+            .chars()
+            .any(|character| character.is_ascii_control() || character.is_ascii_whitespace())
+        && value
+            .split('/')
+            .all(|component| !component.is_empty() && !matches!(component, "." | ".."))
 }
 
 /// Redacts a support-bundle JSON payload without changing non-sensitive shape.
@@ -175,8 +295,7 @@ fn scrub_json_value(value: &mut Value, redact_ips: bool) {
             for (key, child) in map {
                 if support_bundle_secret_key(key)
                     || (is_env_pair && key == "value")
-                    || (support_bundle_path_key(key)
-                        && child.as_str().is_some_and(is_absolute_path))
+                    || (support_bundle_path_key(key) && child.as_str().is_some_and(is_private_path))
                 {
                     *child = Value::String("<redacted>".to_string());
                 } else {
@@ -224,10 +343,6 @@ fn support_bundle_path_key(key: &str) -> bool {
         || key == "resolved_path"
         || key.ends_with("_path")
         || key.ends_with("_dir")
-}
-
-fn is_absolute_path(value: &str) -> bool {
-    Path::new(value).is_absolute()
 }
 
 static PRIVATE_KEY_RE: OnceLock<Option<Regex>> = OnceLock::new();
@@ -380,6 +495,41 @@ mod tests {
     }
 
     #[test]
+    fn redacts_camel_case_query_and_fragment_credentials() {
+        let redacted = redact_url(
+            "https://relay.example/api?accessToken=query-canary&region=west#apiKey=fragment-canary&view=summary",
+        );
+        assert_eq!(
+            redacted,
+            "https://relay.example/api?accessToken=<redacted>&region=west#apiKey=<redacted>&view=summary"
+        );
+        assert!(!redacted.contains("query-canary"));
+        assert!(!redacted.contains("fragment-canary"));
+    }
+
+    #[test]
+    fn preserves_benign_url_fragments_and_name_exceptions() {
+        assert_eq!(
+            redact_url("https://relay.example/docs?token_env=OPENIRL_TOKEN#summary"),
+            "https://relay.example/docs?token_env=OPENIRL_TOKEN#summary"
+        );
+        assert_eq!(
+            redact_url("https://relay.example/docs?withoutToken=true#section-heading"),
+            "https://relay.example/docs?withoutToken=true#section-heading"
+        );
+        assert_eq!(
+            redact_url("https://relay.example/docs?withoutTokenPassword=sensitive-canary#summary"),
+            "https://relay.example/docs?withoutTokenPassword=<redacted>#summary"
+        );
+        assert_eq!(
+            redact_url(
+                "https://relay.example/docs?authenticationCredentials=sensitive-canary#summary"
+            ),
+            "https://relay.example/docs?authenticationCredentials=<redacted>#summary"
+        );
+    }
+
+    #[test]
     fn command_arguments_normalize_hyphenated_secret_names() {
         let args = vec![
             "--stream-key=alpha".to_string(),
@@ -398,6 +548,42 @@ mod tests {
                 "--port=9000".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn command_arguments_cover_prefix_colon_and_slash_forms() {
+        let args = vec![
+            "--authorization-header=Bearer command-canary".to_string(),
+            "--password:colon-canary".to_string(),
+            "/token:slash-canary".to_string(),
+            "--accessToken".to_string(),
+            "following-canary".to_string(),
+            "/private/operator/config.yml".to_string(),
+            "--port=9000".to_string(),
+        ];
+        let redacted = redact_command_args(&args);
+        assert_eq!(
+            redacted,
+            vec![
+                "--authorization-header=<redacted>",
+                "--password:<redacted>",
+                "/token:<redacted>",
+                "--accessToken",
+                "<redacted>",
+                "<redacted-local-path>",
+                "--port=9000",
+            ]
+        );
+        let serialized = redacted.join(" ");
+        for canary in [
+            "command-canary",
+            "colon-canary",
+            "slash-canary",
+            "following-canary",
+            "/private/operator",
+        ] {
+            assert!(!serialized.contains(canary));
+        }
     }
 
     #[test]
@@ -503,5 +689,44 @@ mod tests {
         let redacted = scrub_support_bundle_value(payload, false);
         assert_eq!(redacted["root_dir"], "<redacted>");
         assert_eq!(redacted["relative_path"], "artifacts/report.json");
+    }
+
+    #[test]
+    fn path_policy_is_cross_platform_and_lexical() {
+        for private in [
+            "/Users/operator/report.json",
+            r"C:\\Users\\operator\\report.json",
+            r"\\server\share\report.json",
+            "../private/report.json",
+            r"..\private\report.json",
+            "~/report.json",
+        ] {
+            assert!(is_private_path(private), "expected private path: {private}");
+            assert_eq!(redact_local_path(private), "<redacted-local-path>");
+            assert!(!is_repository_relative_path(private));
+        }
+        for public in [
+            "artifacts/report.json",
+            "scripts/smoke/demo-mode-smoke.py",
+            "not-run",
+        ] {
+            assert!(!is_private_path(public));
+            assert!(is_repository_relative_path(public));
+            assert_eq!(redact_local_path(public), public);
+        }
+        assert!(!is_repository_relative_path("scripts/smoke.py or .ps1"));
+    }
+
+    #[test]
+    fn support_json_redacts_foreign_platform_paths() {
+        let payload = serde_json::json!({
+            "root_dir": r"C:\\Users\\operator\\OpenIRL",
+            "resolved_path": r"\\server\share\support.json",
+            "artifact_reference": "artifacts/report.json"
+        });
+        let redacted = scrub_support_bundle_value(payload, false);
+        assert_eq!(redacted["root_dir"], "<redacted>");
+        assert_eq!(redacted["resolved_path"], "<redacted>");
+        assert_eq!(redacted["artifact_reference"], "artifacts/report.json");
     }
 }

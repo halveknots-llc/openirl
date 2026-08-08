@@ -90,6 +90,7 @@ use tracing_subscriber::{EnvFilter, fmt};
 
 /// Current schema revision.
 const OPENIRL_SCHEMA_REVISION: u16 = 38;
+const MAX_COMPATIBILITY_MATRIX_BYTES: usize = 1024 * 1024;
 
 /// CLI args.
 #[derive(Debug, Parser)]
@@ -120,6 +121,9 @@ enum Command {
         /// Loopback address for the demo dashboard.
         #[arg(long, default_value = "127.0.0.1:7707")]
         bind: SocketAddr,
+        /// Synthetic smoke-test identity returned by the demo health endpoint.
+        #[arg(long, hide = true)]
+        instance_id: Option<String>,
     },
     /// Print a redacted readiness report without inferring source or live results.
     Readiness {
@@ -561,6 +565,7 @@ impl From<DeploymentModeArg> for openirl_core::DeploymentMode {
 struct ApiState {
     started_at: OffsetDateTime,
     mode: RuntimeMode,
+    demo_instance_id: Option<String>,
     config: AppConfig,
     health_engine: Arc<RwLock<HealthEngine>>,
     obs: Arc<dyn ObsController>,
@@ -650,7 +655,7 @@ async fn main() -> anyhow::Result<()> {
             bind,
             obs_adapter,
         } => serve(config, bind, obs_adapter).await,
-        Command::Demo { bind } => serve_demo(bind).await,
+        Command::Demo { bind, instance_id } => serve_demo(bind, instance_id).await,
         Command::Readiness { config } => {
             let config = load_config_or_default(config)?;
             let report = build_readiness_report(
@@ -783,9 +788,16 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Command::CompatibilityValidate { file } => {
-            let raw = std::fs::read_to_string(&file).with_context(|| {
+            let input = std::fs::File::open(&file).with_context(|| {
                 format!("failed to read compatibility matrix at {}", file.display())
             })?;
+            let raw =
+                read_bounded_utf8(input, MAX_COMPATIBILITY_MATRIX_BYTES).with_context(|| {
+                    format!(
+                        "compatibility matrix at {} exceeds the UTF-8 or size policy",
+                        file.display()
+                    )
+                })?;
             let matrix: CompatibilityMatrix = serde_json::from_str(&raw).with_context(|| {
                 format!(
                     "failed to decode compatibility matrix at {}",
@@ -1034,6 +1046,18 @@ async fn main() -> anyhow::Result<()> {
     }
 }
 
+fn read_bounded_utf8(mut reader: impl Read, max_bytes: usize) -> anyhow::Result<String> {
+    let mut bytes = Vec::with_capacity(max_bytes.min(64 * 1024));
+    reader
+        .by_ref()
+        .take(max_bytes.saturating_add(1) as u64)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > max_bytes {
+        bail!("input exceeds the {max_bytes}-byte limit");
+    }
+    String::from_utf8(bytes).context("input is not valid UTF-8")
+}
+
 fn check_config(config_path: Option<PathBuf>) -> anyhow::Result<()> {
     let config = load_config_or_default(config_path)?;
     let report = validate_config(&config);
@@ -1105,17 +1129,34 @@ async fn serve(
         config.api.bind = bind;
     }
 
-    serve_config(config, RuntimeMode::Standard).await
+    serve_config(config, RuntimeMode::Standard, None).await
 }
 
-async fn serve_demo(bind: SocketAddr) -> anyhow::Result<()> {
+async fn serve_demo(bind: SocketAddr, instance_id: Option<String>) -> anyhow::Result<()> {
     if !bind.ip().is_loopback() {
         bail!("demo mode only accepts a loopback bind address");
     }
-    serve_config(demo_config(bind), RuntimeMode::Demo).await
+    if instance_id
+        .as_deref()
+        .is_some_and(|value| !valid_demo_instance_id(value))
+    {
+        bail!("demo instance ID must be 16-128 ASCII letters, digits, dashes, or underscores");
+    }
+    serve_config(demo_config(bind), RuntimeMode::Demo, instance_id).await
 }
 
-async fn serve_config(config: AppConfig, mode: RuntimeMode) -> anyhow::Result<()> {
+fn valid_demo_instance_id(value: &str) -> bool {
+    (16..=128).contains(&value.len())
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
+async fn serve_config(
+    config: AppConfig,
+    mode: RuntimeMode,
+    demo_instance_id: Option<String>,
+) -> anyhow::Result<()> {
     let validation_report = validate_config(&config);
     log_validation_report(&validation_report);
     if !validation_report.ok {
@@ -1150,6 +1191,7 @@ async fn serve_config(config: AppConfig, mode: RuntimeMode) -> anyhow::Result<()
     let state = ApiState {
         started_at: OffsetDateTime::now_utc(),
         mode,
+        demo_instance_id,
         config,
         health_engine: Arc::new(RwLock::new(HealthEngine::new())),
         obs,
@@ -1483,6 +1525,8 @@ struct HealthResponse {
     started_at: String,
     feature_area_count: u8,
     schema_revision: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    instance_id: Option<String>,
 }
 
 async fn health(State(state): State<ApiState>) -> Json<HealthResponse> {
@@ -1491,6 +1535,7 @@ async fn health(State(state): State<ApiState>) -> Json<HealthResponse> {
         started_at: state.started_at.to_string(),
         feature_area_count: INITIAL_FEATURE_AREA_COUNT,
         schema_revision: OPENIRL_SCHEMA_REVISION,
+        instance_id: state.demo_instance_id.clone(),
     })
 }
 
@@ -3397,6 +3442,26 @@ fn init_tracing() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn bounded_text_reader_rejects_oversized_and_invalid_input() {
+        assert!(matches!(
+            read_bounded_utf8(Cursor::new(b"public"), 6).as_deref(),
+            Ok("public")
+        ));
+        assert!(read_bounded_utf8(Cursor::new(vec![b'x'; 7]), 6).is_err());
+        assert!(read_bounded_utf8(Cursor::new([0xff]), 6).is_err());
+    }
+
+    #[test]
+    fn demo_instance_ids_are_bounded_and_public_safe() {
+        assert!(valid_demo_instance_id("0123456789abcdef"));
+        assert!(valid_demo_instance_id("openirl-smoke_0123456789abcdef"));
+        assert!(!valid_demo_instance_id("short"));
+        assert!(!valid_demo_instance_id("contains/private/path"));
+        assert!(!valid_demo_instance_id(&"x".repeat(129)));
+    }
 
     #[test]
     fn support_bundle_api_output_dir_stays_under_configured_root() {

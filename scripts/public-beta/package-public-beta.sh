@@ -4,6 +4,9 @@ set -euo pipefail
 ROOT="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
+printf '%s\n' \
+  'public evidence review: remove stream credentials, authentication credentials, credential-bearing URLs, private network details, local paths, device identifiers, location-sensitive media, private-production stream IDs, and raw support bundles' >&2
+
 if ! git diff --quiet HEAD -- || [ -n "$(git status --porcelain --untracked-files=all)" ]; then
   printf '%s\n' 'refusing to package a dirty worktree; commit or clean all changes first' >&2
   exit 1

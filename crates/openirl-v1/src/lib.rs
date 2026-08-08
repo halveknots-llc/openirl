@@ -5,7 +5,6 @@
 //! local-first: no managed cloud account is required to evaluate the plans or
 //! write package contents.
 
-pub use openirl_readiness::EvidenceMaturity as FeatureStatus;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -39,6 +38,16 @@ pub enum Priority {
     P3,
 }
 
+/// Source-catalog classification. This does not assert validation evidence or release maturity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FeatureStatus {
+    /// The repository contains an implementation surface for this catalog area.
+    AvailableInSource,
+    /// The catalog area is represented as future or design work only.
+    Modeled,
+}
+
 /// A public-beta feature area.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct V1Feature {
@@ -48,7 +57,7 @@ pub struct V1Feature {
     pub title: String,
     /// Priority.
     pub priority: Priority,
-    /// Implementation status.
+    /// Source-catalog status, independent of runtime or release evidence.
     pub status: FeatureStatus,
     /// Outcome summary.
     pub outcome: String,
@@ -222,10 +231,11 @@ macro_rules! feature_area {
 
 fn feature_status(key: &str) -> FeatureStatus {
     match key {
-        "dashboard" | "security" | "brownout" | "support-bundles" => {
-            FeatureStatus::LocalRuntimeValidated
-        }
-        "obs-reconciliation"
+        "dashboard"
+        | "security"
+        | "brownout"
+        | "support-bundles"
+        | "obs-reconciliation"
         | "local-ingest"
         | "encoder-profiles"
         | "obs-output"
@@ -235,7 +245,7 @@ fn feature_status(key: &str) -> FeatureStatus {
         | "alpha-source-package"
         | "docs"
         | "public-beta-security"
-        | "vertical-clips" => FeatureStatus::SourceValidated,
+        | "vertical-clips" => FeatureStatus::AvailableInSource,
         _ => FeatureStatus::Modeled,
     }
 }
@@ -806,6 +816,10 @@ pub fn default_v1_package_layout(root: impl Into<String>) -> V1PackageLayout {
             file("issue_templates/bug_report.md", bug_report_template()),
             file("issue_templates/field_report.md", field_report_template()),
             file(
+                "issue_templates/feature_request.md",
+                feature_request_template(),
+            ),
+            file(
                 "plugin/openirl-plugin-manifest.schema.json",
                 plugin_schema(),
             ),
@@ -1160,14 +1174,13 @@ fn troubleshooting_no_video() -> String {
     )
 }
 fn bug_report_template() -> String {
-    s(
-        "# Bug Report\n\n## Environment\n\n## Steps to Reproduce\n\n## Expected Result\n\n## Actual Result\n\n## Support Bundle\nAttach a redacted support bundle when possible.\n",
-    )
+    s(include_str!("../../../issue_templates/bug_report.md"))
 }
 fn field_report_template() -> String {
-    s(
-        "# Field Report\n\n## Device and Encoder\n\n## Network Conditions\n\n## OBS Result\n\n## Brownout / BRB Events\n\n## Support Bundle Path\n",
-    )
+    s(include_str!("../../../issue_templates/field_report.md"))
+}
+fn feature_request_template() -> String {
+    s(include_str!("../../../issue_templates/feature_request.md"))
 }
 fn plugin_schema() -> String {
     s(r#"{
@@ -1217,7 +1230,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn feature_catalog_uses_evidence_maturity_instead_of_one_implemented_state() {
+    fn feature_catalog_does_not_claim_validation_evidence() -> Result<(), Box<dyn std::error::Error>>
+    {
         let features = build_v1_features();
         assert!(
             features
@@ -1227,20 +1241,50 @@ mod tests {
         assert!(
             features
                 .iter()
-                .any(|feature| feature.status == FeatureStatus::SourceValidated)
+                .any(|feature| feature.status == FeatureStatus::AvailableInSource)
         );
-        assert!(
-            features
-                .iter()
-                .any(|feature| { feature.status == FeatureStatus::LocalRuntimeValidated })
+        let serialized = serde_json::to_string(&features)?;
+        for proof_label in [
+            "source-validated",
+            "local-runtime-validated",
+            "integration-validated",
+            "field-validated",
+            "released",
+        ] {
+            assert!(!serialized.contains(proof_label));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn package_uses_canonical_public_issue_templates() {
+        let layout = default_v1_package_layout("dist/openirl-v1");
+        let bug = layout
+            .files
+            .iter()
+            .find(|file| file.path == "issue_templates/bug_report.md")
+            .map(|file| file.contents.as_str());
+        let field = layout
+            .files
+            .iter()
+            .find(|file| file.path == "issue_templates/field_report.md")
+            .map(|file| file.contents.as_str());
+        let feature = layout
+            .files
+            .iter()
+            .find(|file| file.path == "issue_templates/feature_request.md")
+            .map(|file| file.contents.as_str());
+        assert_eq!(
+            bug,
+            Some(include_str!("../../../issue_templates/bug_report.md"))
         );
-        assert!(!features.iter().any(|feature| {
-            matches!(
-                feature.status,
-                FeatureStatus::IntegrationValidated
-                    | FeatureStatus::FieldValidated
-                    | FeatureStatus::Released
-            )
-        }));
+        assert_eq!(
+            field,
+            Some(include_str!("../../../issue_templates/field_report.md"))
+        );
+        assert_eq!(
+            feature,
+            Some(include_str!("../../../issue_templates/feature_request.md"))
+        );
     }
 }
