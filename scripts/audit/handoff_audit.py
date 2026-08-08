@@ -86,8 +86,8 @@ def main() -> int:
     out_json=ROOT/'audit/handoff-audit.json'
     out_md=ROOT/'audit/HANDOFF_AUDIT.md'
     out_json.parent.mkdir(parents=True, exist_ok=True)
-    out_json.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-    out_md.write_text('# OpenIRL Source Readiness Audit\n\n**Status:** '+report['status'].upper()+'\n\nFindings: '+str(len(findings))+'\n', encoding='utf-8')
+    out_json.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n', encoding='utf-8', newline='\n')
+    out_md.write_text('# OpenIRL Source Readiness Audit\n\n**Status:** '+report['status'].upper()+'\n\nFindings: '+str(len(findings))+'\n', encoding='utf-8', newline='\n')
     print('handoff audit:', report['status'])
     if findings:
         for item in findings[:80]:
