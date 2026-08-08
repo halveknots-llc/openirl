@@ -3467,11 +3467,8 @@ mod tests {
     fn support_bundle_api_output_dir_stays_under_configured_root() {
         let resolved =
             support_bundle_api_output_dir("artifacts/support-bundles", Some("issue-42".into()));
-        assert!(resolved.is_ok());
-        assert_eq!(
-            resolved.ok().as_deref(),
-            Some("artifacts/support-bundles/issue-42")
-        );
+        let expected = PathBuf::from("artifacts/support-bundles").join("issue-42");
+        assert_eq!(resolved.map(PathBuf::from), Ok(expected));
 
         assert!(support_bundle_api_output_dir("artifacts/support-bundles", None).is_ok());
         assert!(
