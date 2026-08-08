@@ -51,6 +51,7 @@ RELEASE_VERIFICATION_TERMS = (
 MANIFEST_REVISION_ASSIGNMENT = re.compile(
     r"(?im)^\s*\$[a-z_][a-z0-9_]*\s*=.*manifest\.json.*\.source_revision\s*$"
 )
+REQUIRED_GIT_ATTRIBUTE = "* text=auto eol=lf"
 
 Finding = tuple[str, str, str]
 
@@ -475,11 +476,33 @@ def validate_release_verification_docs(root: Path = ROOT) -> list[Finding]:
     return findings
 
 
+def validate_git_attributes(root: Path = ROOT) -> list[Finding]:
+    path = root / ".gitattributes"
+    try:
+        lines = {
+            re.sub(r"\s+", " ", line.strip())
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+    except Exception as exc:
+        return [(".gitattributes", "line-ending-policy", str(exc))]
+    if REQUIRED_GIT_ATTRIBUTE not in lines:
+        return [
+            (
+                ".gitattributes",
+                "line-ending-policy",
+                "text files must use LF in every checkout",
+            )
+        ]
+    return []
+
+
 def main() -> int:
     findings: list[Finding] = []
     findings.extend(validate_actions_policy())
     findings.extend(validate_public_evidence_policy())
     findings.extend(validate_release_verification_docs())
+    findings.extend(validate_git_attributes())
 
     for path in ROOT.rglob("*.json"):
         if path.name.startswith("._") or "target" in path.parts:

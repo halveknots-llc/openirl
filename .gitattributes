@@ -1,3 +1,11 @@
+# Keep source and evidence files byte-stable across contributor and CI platforms.
+* text=auto eol=lf
+
+# Preserve native line endings for Windows command launchers when they are added.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Keep large binary assets in Git LFS without text normalization.
 *.png filter=lfs diff=lfs merge=lfs -text
 *.jpg filter=lfs diff=lfs merge=lfs -text
 *.jpeg filter=lfs diff=lfs merge=lfs -text
