@@ -178,7 +178,10 @@ try {
     }
   }
   $reportJson = $report | ConvertTo-Json -Depth 6
-  Write-Utf8NoBom ([System.IO.Path]::GetFullPath((Join-Path $root $ReportPath))) "$reportJson`n"
+  $reportFullPath = [System.IO.Path]::GetFullPath((Join-Path $root $ReportPath))
+  Write-Utf8NoBom $reportFullPath "$reportJson`n"
+  python scripts\security\release-artifact-scan.py --archive $zip --manifest $externalManifest --scan-file $checksum --scan-file $reportFullPath --forbid-local-root $root
+  Assert-LastExitCode 'Final verification evidence secret scan'
 }
 finally {
   if (Test-Path $extractRoot) {

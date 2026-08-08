@@ -28,6 +28,12 @@ DENIED_PARTS = {
     "__pycache__",
 }
 DENIED_SUFFIXES = {".key", ".pem", ".p12", ".pfx", ".kdbx"}
+SENSITIVE_NAME = (
+    rb"(?:access[_-]?token|api[_-]?key|auth(?:entication)?[_-]?token|"
+    rb"authorization(?:[_-]?header)?|dashboard[_-]?token|obs[_-]?password|"
+    rb"password|passphrase|private[_-]?key|secret|signature|srt[_-]?passphrase|"
+    rb"stream[_-]?key|token)"
+)
 SENSITIVE_PATTERNS = (
     ("private key", re.compile(rb"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
     ("AWS access key", re.compile(rb"(?:AKIA|ASIA)[0-9A-Z]{16}")),
@@ -43,7 +49,30 @@ SENSITIVE_PATTERNS = (
     (
         "assigned credential",
         re.compile(
-            rb"\b(?:password|passphrase|stream[_-]?key|dashboard[_-]?token|obs[_-]?password|private[_-]?key)\b\s*[:=]\s*[\"']?[^\s\"'<>]{12,}",
+            rb"(?<![A-Za-z0-9])" + SENSITIVE_NAME + rb"\s*[:=]\s*[\"']?[^\s\"'<>]{12,}",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "credential query or fragment",
+        re.compile(
+            rb"[?&#]" + SENSITIVE_NAME + rb"=[^\s&#\"'<>]{12,}",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "credential command option",
+        re.compile(
+            rb"(?<![A-Za-z0-9])(?:--|/)"
+            + SENSITIVE_NAME
+            + rb"(?:\s+|[:=])(?:Bearer\s+)?[^\s\"'<>]{12,}",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "RTMP path credential",
+        re.compile(
+            rb"\brtmps?://[^\s/?#]+(?:/[^\s/?#]+)*/[A-Za-z0-9._~+%=-]{12,}(?=$|[\s?#\"'<>)])",
             re.IGNORECASE,
         ),
     ),
@@ -89,6 +118,16 @@ def encoded_markers(values: list[str]) -> list[bytes]:
     return markers
 
 
+def scan_bytes(payload: bytes, forbidden: list[bytes]) -> None:
+    lowered = payload.lower()
+    for marker in forbidden:
+        if marker.lower() in lowered:
+            raise ArtifactScanError("artifact contains a forbidden local build path")
+    for label, pattern in SENSITIVE_PATTERNS:
+        if pattern.search(payload):
+            raise ArtifactScanError(f"artifact contains a high-confidence {label} pattern")
+
+
 def scan_stream(stream, forbidden: list[bytes]) -> None:
     previous = b""
     while True:
@@ -96,17 +135,13 @@ def scan_stream(stream, forbidden: list[bytes]) -> None:
         if not chunk:
             break
         window = previous + chunk
-        lowered = window.lower()
-        for marker in forbidden:
-            if marker.lower() in lowered:
-                raise ArtifactScanError("artifact contains a forbidden local build path")
-        for label, pattern in SENSITIVE_PATTERNS:
-            if pattern.search(window):
-                raise ArtifactScanError(f"artifact contains a high-confidence {label} pattern")
+        scan_bytes(window, forbidden)
         previous = window[-OVERLAP_BYTES:]
 
 
 def scan_manifest(path: Path, forbidden: list[bytes]) -> dict:
+    if path.is_symlink() or not path.is_file():
+        raise ArtifactScanError("manifest must be a regular file")
     if path.stat().st_size > MAX_MANIFEST_BYTES:
         raise ArtifactScanError("manifest exceeds the public release size limit")
     with path.open("rb") as stream:
@@ -120,6 +155,15 @@ def scan_manifest(path: Path, forbidden: list[bytes]) -> dict:
     return payload
 
 
+def scan_public_file(path: Path, forbidden: list[bytes]) -> None:
+    if path.is_symlink() or not path.is_file():
+        raise ArtifactScanError("additional public evidence must be a regular file")
+    if path.stat().st_size > MAX_MANIFEST_BYTES:
+        raise ArtifactScanError("additional public evidence exceeds the release size limit")
+    with path.open("rb") as stream:
+        scan_stream(stream, forbidden)
+
+
 def scan_archive(path: Path, forbidden: list[bytes]) -> tuple[int, int]:
     total = 0
     seen: set[str] = set()
@@ -129,6 +173,7 @@ def scan_archive(path: Path, forbidden: list[bytes]) -> tuple[int, int]:
             raise ArtifactScanError("archive member count is outside the public release limit")
         for info in members:
             member_path = validate_member_path(info.filename)
+            scan_bytes(info.filename.encode("utf-8"), forbidden)
             canonical = member_path.as_posix().casefold()
             if canonical in seen:
                 raise ArtifactScanError("archive contains a duplicate platform path")
@@ -156,6 +201,16 @@ def scan_archive(path: Path, forbidden: list[bytes]) -> tuple[int, int]:
 
 
 def self_test() -> None:
+    def require_archive_rejection(root: Path, name: str, member: str, payload: bytes) -> None:
+        archive_path = root / f"{name}.zip"
+        with zipfile.ZipFile(archive_path, "w") as archive:
+            archive.writestr(member, payload)
+        try:
+            scan_archive(archive_path, [])
+        except ArtifactScanError:
+            return
+        raise ArtifactScanError(f"self-test accepted unsafe {name} evidence")
+
     with tempfile.TemporaryDirectory(prefix="openirl-artifact-scan-") as raw_tmp:
         root = Path(raw_tmp)
         manifest = root / "manifest.json"
@@ -174,33 +229,67 @@ def self_test() -> None:
         scan_manifest(manifest, [])
         scan_archive(safe, [])
 
-        unsafe = root / "unsafe.zip"
-        with zipfile.ZipFile(unsafe, "w") as archive:
-            archive.writestr("OpenIRL/.env", "synthetic unsafe path")
+        private_key = ("-----BEGIN " + "PRIVATE KEY-----").encode("ascii")
+        unsafe_payloads = {
+            "private-key": private_key,
+            "fragment-credential": b"https://relay.invalid/live#access_token="
+            + b"synthetic-release-canary-12345",
+            "camel-query-credential": b"https://relay.invalid/api?apiKey="
+            + b"synthetic-release-canary-12345",
+            "command-credential": b"--authorization-header "
+            + b"synthetic-release-canary-12345",
+            "rtmp-path-credential": b"rtmp://relay.invalid/live/"
+            + b"synthetic-release-canary-12345",
+        }
+        for name, payload in unsafe_payloads.items():
+            require_archive_rejection(root, name, "OpenIRL/review.txt", payload)
+
+        require_archive_rejection(root, "unsafe-path", "OpenIRL/.env", b"unsafe")
+        require_archive_rejection(
+            root,
+            "credential-name",
+            "OpenIRL/accessToken=synthetic-release-canary-12345.txt",
+            b"unsafe",
+        )
+
+        local_root = str(root / "private-checkout")
+        local_archive = root / "local-root.zip"
+        with zipfile.ZipFile(local_archive, "w") as archive:
+            archive.writestr("OpenIRL/review.txt", local_root)
         try:
-            scan_archive(unsafe, [])
+            scan_archive(local_archive, encoded_markers([local_root]))
         except ArtifactScanError:
             pass
         else:
-            raise ArtifactScanError("self-test accepted an unsafe archive path")
+            raise ArtifactScanError("self-test accepted a forbidden local build path")
 
-        credential = root / "credential.zip"
-        with zipfile.ZipFile(credential, "w") as archive:
+        safe_controls = root / "safe-controls.zip"
+        with zipfile.ZipFile(safe_controls, "w") as archive:
             archive.writestr(
                 "OpenIRL/review.txt",
-                "-----BEGIN " + "PRIVATE KEY-----",
+                "https://relay.invalid/api?view=summary#operations "
+                "rtmp://relay.invalid/live --authorization-header=<redacted>",
             )
+        scan_archive(safe_controls, [])
+
+        unsafe_metadata = root / "unsafe-metadata.json"
+        unsafe_metadata.write_bytes(
+            b'{"relay":"https://relay.invalid/api?apiKey='
+            + b'synthetic-release-canary-12345"}'
+        )
         try:
-            scan_archive(credential, [])
+            scan_public_file(unsafe_metadata, [])
         except ArtifactScanError:
-            return
-        raise ArtifactScanError("self-test accepted a credential pattern")
+            pass
+        else:
+            raise ArtifactScanError("self-test accepted unsafe public metadata")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive", type=Path)
     parser.add_argument("--manifest", type=Path)
+    parser.add_argument("--scan-file", type=Path, action="append", default=[])
     parser.add_argument("--forbid-local-root", action="append", default=[])
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
@@ -215,7 +304,13 @@ def main() -> int:
     forbidden = encoded_markers(args.forbid_local_root)
     scan_manifest(args.manifest, forbidden)
     members, total = scan_archive(args.archive, forbidden)
-    print(f"release artifact scan passed: {members} members, {total} uncompressed bytes")
+    for path in args.scan_file:
+        scan_public_file(path, forbidden)
+    print(
+        "release artifact scan passed: "
+        f"{members} members, {total} uncompressed bytes, "
+        f"{len(args.scan_file)} additional files"
+    )
     return 0
 
 

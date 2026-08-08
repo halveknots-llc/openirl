@@ -15,12 +15,18 @@
 
 ## Public repository and supply chain
 
-- GitHub Actions references are pinned to reviewed immutable commits.
+- GitHub Actions, reusable workflow, and Docker image references are parsed as
+  YAML and pinned to reviewed immutable commits or image digests, including
+  recursively referenced local actions.
 - Trusted branch and tag artifacts receive keyless signed provenance only after independent verification.
 - Dependency-review checks are enabled for pull requests.
 - Container base images are pinned by digest and `.dockerignore` excludes credentials, caches, support bundles, and local metadata.
 - Secret and redaction canaries pass without publishing raw scan output or generated support bundles.
-- The bounded release-artifact scan rejects local build paths, unsafe archive entries, credential containers, and high-confidence credential patterns.
+- The bounded release-artifact scan rejects local build paths, unsafe archive
+  entries, credential containers, and high-confidence credential patterns in
+  the archive, manifests, checksum, verification report, and release notes.
+- A release tag is fetched and re-resolved immediately before publication; its
+  commit must still equal the revision whose package and provenance passed.
 - Generated artifact directories and files have owner-only permissions where supported.
 - Default MediaMTX listeners bind to loopback; any LAN, VPN, or public exposure has explicit authentication and network review.
 
