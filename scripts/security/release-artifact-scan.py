@@ -21,6 +21,8 @@ CHUNK_BYTES = 1024 * 1024
 OVERLAP_BYTES = 512
 ZIP_EOCD_BYTES = 22
 MAX_ZIP_COMMENT_BYTES = 65_535
+ZIP_LOCAL_HEADER = struct.Struct("<4s5H3L2H")
+ZIP_LOCAL_SIGNATURE = b"PK\x03\x04"
 
 DENIED_PARTS = {
     ".git",
@@ -55,7 +57,14 @@ SENSITIVE_PATTERNS = (
         re.compile(
             rb"(?<![A-Za-z0-9])(?:[\"']\s*)?"
             + SENSITIVE_NAME
-            + rb"(?:\s*[\"'])?\s*[:=]\s*[\"']?[^\s\"'<>]{12,}",
+            + rb"(?:\s*[\"'])?\s*[:=]\s*"
+            + rb"(?:"
+            + rb"(?P<quote>[\"'])(?P<quoted>[^\s\"'<>]{12,})(?P=quote)"
+            + rb"|"
+            + rb"(?=[A-Za-z0-9._~+/%=-]{12,}(?:$|[\s,;})\]]))"
+            + rb"(?=[A-Za-z0-9._~+/%=-]*[0-9])"
+            + rb"[A-Za-z0-9._~+/%=-]{12,}(?=$|[\s,;})\]])"
+            + rb")",
             re.IGNORECASE,
         ),
     ),
@@ -203,15 +212,31 @@ def inspect_zip_envelope(path: Path) -> tuple[int, bytes]:
     raise ArtifactScanError("archive has an invalid envelope or trailing data")
 
 
+def read_local_metadata(stream, offset: int) -> tuple[bytes, bytes]:
+    if offset < 0:
+        raise ArtifactScanError("archive member has an invalid local header offset")
+    stream.seek(offset)
+    header = stream.read(ZIP_LOCAL_HEADER.size)
+    if len(header) != ZIP_LOCAL_HEADER.size:
+        raise ArtifactScanError("archive member has a truncated local header")
+    fields = ZIP_LOCAL_HEADER.unpack(header)
+    if fields[0] != ZIP_LOCAL_SIGNATURE:
+        raise ArtifactScanError("archive member has an invalid local header")
+    name_size, extra_size = fields[-2:]
+    name = stream.read(name_size)
+    extra = stream.read(extra_size)
+    if len(name) != name_size or len(extra) != extra_size:
+        raise ArtifactScanError("archive member has truncated local metadata")
+    return name, extra
+
+
 def scan_archive(path: Path, forbidden: list[bytes]) -> tuple[int, int]:
     declared_members, archive_comment = inspect_zip_envelope(path)
     scan_bytes(archive_comment, forbidden)
-    with path.open("rb") as stream:
-        scan_stream(stream, forbidden)
 
     total = 0
     seen: set[str] = set()
-    with zipfile.ZipFile(path) as archive:
+    with path.open("rb") as raw_archive, zipfile.ZipFile(path) as archive:
         members = archive.infolist()
         if len(members) != declared_members:
             raise ArtifactScanError("archive member count is outside the public release limit")
@@ -220,6 +245,9 @@ def scan_archive(path: Path, forbidden: list[bytes]) -> tuple[int, int]:
             scan_bytes(info.filename.encode("utf-8"), forbidden)
             scan_bytes(info.comment, forbidden)
             scan_bytes(info.extra, forbidden)
+            local_name, local_extra = read_local_metadata(raw_archive, info.header_offset)
+            scan_bytes(local_name, forbidden)
+            scan_bytes(local_extra, forbidden)
             canonical = member_path.as_posix().casefold()
             if canonical in seen:
                 raise ArtifactScanError("archive contains a duplicate platform path")
@@ -240,8 +268,8 @@ def scan_archive(path: Path, forbidden: list[bytes]) -> tuple[int, int]:
             total += info.file_size
             if total > MAX_TOTAL_BYTES:
                 raise ArtifactScanError("archive exceeds the total public release size limit")
-            if not info.is_dir():
-                with archive.open(info) as stream:
+            with archive.open(info) as stream:
+                if not info.is_dir():
                     scan_stream(stream, forbidden)
     return len(members), total
 
@@ -284,6 +312,35 @@ def self_test() -> None:
         scan_manifest(manifest, [])
         scan_archive(safe, [])
 
+        container_boundary = root / "container-boundary.zip"
+        info = zipfile.ZipInfo("OpenIRL/https")
+        info.compress_type = zipfile.ZIP_STORED
+        with zipfile.ZipFile(container_boundary, "w") as archive:
+            archive.writestr(info, b"://operator:synthetic-value@relay.invalid")
+        scan_archive(container_boundary, [])
+
+        local_extra = root / "local-extra.zip"
+        synthetic_canary = b"synthetic-release-canary-12345"
+        unsafe_extra_value = b"dashboard_token=" + synthetic_canary
+        safe_extra = struct.pack("<HH", 0xCAFE, len(unsafe_extra_value)) + (
+            b"x" * len(unsafe_extra_value)
+        )
+        unsafe_extra = struct.pack("<HH", 0xCAFE, len(unsafe_extra_value)) + unsafe_extra_value
+        info = zipfile.ZipInfo("OpenIRL/README.md")
+        info.extra = safe_extra
+        with zipfile.ZipFile(local_extra, "w") as archive:
+            archive.writestr(info, "synthetic public artifact")
+        with local_extra.open("r+b") as stream:
+            header = ZIP_LOCAL_HEADER.unpack(stream.read(ZIP_LOCAL_HEADER.size))
+            stream.seek(ZIP_LOCAL_HEADER.size + header[-2])
+            stream.write(unsafe_extra)
+        try:
+            scan_archive(local_extra, [])
+        except ArtifactScanError:
+            pass
+        else:
+            raise ArtifactScanError("self-test accepted unsafe local extra metadata")
+
         private_key = ("-----BEGIN " + "PRIVATE KEY-----").encode("ascii")
         unsafe_payloads = {
             "private-key": private_key,
@@ -299,7 +356,6 @@ def self_test() -> None:
         for name, payload in unsafe_payloads.items():
             require_archive_rejection(root, name, "OpenIRL/review.txt", payload)
 
-        synthetic_canary = b"synthetic-release-canary-12345"
         require_public_file_rejection(
             root,
             "quoted-structured-key.json",
@@ -383,7 +439,10 @@ def self_test() -> None:
             archive.writestr(
                 "OpenIRL/review.txt",
                 "https://relay.invalid/api?view=summary#operations "
-                "rtmp://relay.invalid/live --authorization-header=<redacted>",
+                "rtmp://relay.invalid/live --authorization-header=<redacted> "
+                "authToken = tokenInput.value.trim(); "
+                "$Password = $env:OPENIRL_OBS_PASSWORD, "
+                "$secret = [Convert]::ToBase64String($secretBytes)",
             )
         scan_archive(safe_controls, [])
 
