@@ -98,6 +98,7 @@ foreach ($file in $files) {
     --source-ref "refs/tags/$tag"
   if ($LASTEXITCODE -ne 0) { throw "Provenance verification failed: $file" }
 }
+$releaseAuthenticated = $true
 ```
 
 The attestation signs artifact provenance. It is not an Authenticode publisher
@@ -123,16 +124,27 @@ belong in the [compatibility matrix](COMPATIBILITY.md).
 
 ## Local verification
 
-On Windows, check out the manifest's exact `source_revision`, place the three
-package evidence files in `dist/windows-alpha`, then run:
+Only after the tagged-release authentication above succeeds, resolve the expected
+source revision from the independently selected tag. Use a clean checkout at that
+revision, place the three package evidence files in `dist/windows-alpha`, then
+run:
 
 ```powershell
-$revision = (Get-Content -Raw .\dist\windows-alpha\openirl-windows-portable-alpha.manifest.json | ConvertFrom-Json).source_revision
+if ($releaseAuthenticated -ne $true) { throw 'Complete tagged-release authentication first' }
+$revision = gh api "repos/$repo/commits/$tag" --jq '.sha'
+if ($LASTEXITCODE -ne 0) { throw 'Expected tag revision lookup failed' }
+$revision = $revision.Trim()
+if ($revision -notmatch '\A[0-9a-f]{40}\z') { throw 'Expected tag did not resolve to a full commit' }
+
+git checkout --detach $revision
+if ($LASTEXITCODE -ne 0) { throw 'Expected revision checkout failed' }
+
 .\scripts\windows\verify-alpha-portable.ps1 `
   -ArtifactDir dist\windows-alpha `
   -ExpectedRevision $revision
 ```
 
-The verifier writes the fourth file, the independent verification report. Keep
-all credentials and raw production evidence outside the checkout and artifact
-directory.
+Local verification supplements release and attestation authentication; it does
+not establish artifact authenticity by itself. The verifier writes the fourth
+file, the independent verification report. Keep all credentials and raw
+production evidence outside the checkout and artifact directory.

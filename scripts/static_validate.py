@@ -39,6 +39,18 @@ TRUSTED_RELEASE_REF = re.compile(
     r"(?:github\.ref\s*==\s*['\"]refs/heads/main['\"]|"
     r"startsWith\(\s*github\.ref\s*,\s*['\"]refs/tags/v['\"]\s*\))"
 )
+RELEASE_VERIFICATION_DOCS = (
+    "docs/RELEASE_PROVENANCE.md",
+    "docs/runbooks/WINDOWS_OBS_ALPHA.md",
+)
+RELEASE_VERIFICATION_TERMS = (
+    "$releaseauthenticated",
+    'gh api "repos/$repo/commits/$tag"',
+    "supplement",
+)
+MANIFEST_REVISION_ASSIGNMENT = re.compile(
+    r"(?im)^\s*\$[a-z_][a-z0-9_]*\s*=.*manifest\.json.*\.source_revision\s*$"
+)
 
 Finding = tuple[str, str, str]
 
@@ -431,10 +443,43 @@ def validate_public_evidence_policy(root: Path = ROOT) -> list[Finding]:
     return findings
 
 
+def validate_release_verification_docs(root: Path = ROOT) -> list[Finding]:
+    findings: list[Finding] = []
+    for surface in RELEASE_VERIFICATION_DOCS:
+        path = root / surface
+        if not path.is_file():
+            findings.append((surface, "release-trust-policy", "required guide is missing"))
+            continue
+        if path.stat().st_size > MAX_POLICY_FILE_BYTES:
+            findings.append((surface, "release-trust-policy", "guide exceeds 2 MiB"))
+            continue
+        text = path.read_text(encoding="utf-8")
+        if MANIFEST_REVISION_ASSIGNMENT.search(text):
+            findings.append(
+                (
+                    surface,
+                    "release-trust-policy",
+                    "expected revision must not be derived from downloaded manifest metadata",
+                )
+            )
+        normalized = re.sub(r"\s+", " ", text).casefold()
+        for term in RELEASE_VERIFICATION_TERMS:
+            if term not in normalized:
+                findings.append(
+                    (
+                        surface,
+                        "release-trust-policy",
+                        f"missing required independent verification term: {term}",
+                    )
+                )
+    return findings
+
+
 def main() -> int:
     findings: list[Finding] = []
     findings.extend(validate_actions_policy())
     findings.extend(validate_public_evidence_policy())
+    findings.extend(validate_release_verification_docs())
 
     for path in ROOT.rglob("*.json"):
         if path.name.startswith("._") or "target" in path.parts:

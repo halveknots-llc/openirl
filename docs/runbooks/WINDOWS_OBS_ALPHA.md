@@ -33,6 +33,7 @@ foreach ($file in $files) {
     --source-ref "refs/tags/$tag"
   if ($LASTEXITCODE -ne 0) { throw "Provenance verification failed: $file" }
 }
+$releaseAuthenticated = $true
 ```
 
 The provenance attestation does not provide an Authenticode publisher signature.
@@ -42,21 +43,32 @@ package path; the MSI script remains an operator-reviewed experimental path.
 
 ## Local package verification
 
-From a clean checkout at the manifest's `source_revision`, place the zip,
-checksum, and manifest in `dist\windows-alpha`. Write the new local verification
-report outside that evidence directory so a prior report cannot be mistaken for
-an input:
+Complete the tagged-release authentication above first. Resolve the expected
+revision from the independently selected tag, use a clean checkout at that
+revision, and place the zip, checksum, and manifest in `dist\windows-alpha`.
+Write the new local verification report outside that evidence directory so a
+prior report cannot be mistaken for an input:
 
 ```powershell
-$revision = (Get-Content -Raw .\dist\windows-alpha\openirl-windows-portable-alpha.manifest.json | ConvertFrom-Json).source_revision
+if ($releaseAuthenticated -ne $true) { throw 'Complete tagged-release authentication first' }
+$revision = gh api "repos/$repo/commits/$tag" --jq '.sha'
+if ($LASTEXITCODE -ne 0) { throw 'Expected tag revision lookup failed' }
+$revision = $revision.Trim()
+if ($revision -notmatch '\A[0-9a-f]{40}\z') { throw 'Expected tag did not resolve to a full commit' }
+
+git checkout --detach $revision
+if ($LASTEXITCODE -ne 0) { throw 'Expected revision checkout failed' }
+
 .\scripts\windows\verify-alpha-portable.ps1 `
   -ArtifactDir dist\windows-alpha `
   -ExpectedRevision $revision `
   -ReportPath .\local-verification.json
 ```
 
-This reruns the archive, manifest, inventory, secret-scan, and packaged CLI
-checks. It does not contact OBS or MediaMTX.
+This local verification supplements release and attestation authentication; it
+does not establish artifact authenticity by itself. It reruns the archive,
+manifest, inventory, secret-scan, and packaged CLI checks. It does not contact
+OBS or MediaMTX.
 
 ## OBS integration check
 

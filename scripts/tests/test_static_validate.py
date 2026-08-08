@@ -319,5 +319,48 @@ class PublicEvidencePolicyTests(unittest.TestCase):
             self.assertIn("local paths", findings[0][2])
 
 
+class ReleaseVerificationDocsTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory(prefix="openirl-release-trust-")
+        self.root = Path(self.temporary.name)
+        (self.root / "docs" / "runbooks").mkdir(parents=True)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def write_guides(self, content: str) -> None:
+        for relative in static_validate.RELEASE_VERIFICATION_DOCS:
+            (self.root / relative).write_text(content, encoding="utf-8")
+
+    def test_accepts_independent_tag_revision_and_supplemental_check(self) -> None:
+        self.write_guides(
+            """
+$releaseAuthenticated = $true
+$revision = gh api "repos/$repo/commits/$tag" --jq '.sha'
+Local verification supplements release authentication.
+"""
+        )
+
+        self.assertEqual(
+            static_validate.validate_release_verification_docs(self.root), []
+        )
+
+    def test_rejects_manifest_derived_expected_revision(self) -> None:
+        self.write_guides(
+            """
+$releaseAuthenticated = $true
+$revision = gh api "repos/$repo/commits/$tag" --jq '.sha'
+Local verification supplements release authentication.
+$expected = (Get-Content -Raw package.manifest.json | ConvertFrom-Json).source_revision
+"""
+        )
+
+        findings = static_validate.validate_release_verification_docs(self.root)
+        self.assertEqual(len(findings), 2)
+        self.assertTrue(
+            all(kind == "release-trust-policy" for _, kind, _ in findings)
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
