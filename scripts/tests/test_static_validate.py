@@ -362,5 +362,33 @@ $expected = (Get-Content -Raw package.manifest.json | ConvertFrom-Json).source_r
         )
 
 
+class GitAttributesTests(unittest.TestCase):
+    def test_accepts_cross_platform_lf_policy(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="openirl-git-attributes-") as temporary:
+            root = Path(temporary)
+            (root / ".gitattributes").write_text(
+                "# stable source\n*  text=auto   eol=lf\n", encoding="utf-8"
+            )
+
+            self.assertEqual(static_validate.validate_git_attributes(root), [])
+
+    def test_rejects_platform_dependent_text_checkout(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="openirl-git-attributes-") as temporary:
+            root = Path(temporary)
+            (root / ".gitattributes").write_text("* text=auto\n", encoding="utf-8")
+
+            findings = static_validate.validate_git_attributes(root)
+            self.assertEqual(
+                findings,
+                [
+                    (
+                        ".gitattributes",
+                        "line-ending-policy",
+                        "text files must use LF in every checkout",
+                    )
+                ],
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
