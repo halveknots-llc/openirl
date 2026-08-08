@@ -23,6 +23,8 @@ ZIP_EOCD_BYTES = 22
 MAX_ZIP_COMMENT_BYTES = 65_535
 ZIP_LOCAL_HEADER = struct.Struct("<4s5H3L2H")
 ZIP_LOCAL_SIGNATURE = b"PK\x03\x04"
+UTF16_LE_ASCII_RUN = re.compile(rb"(?:[\x20-\x7e]\x00){6,}")
+UTF16_BE_ASCII_RUN = re.compile(rb"(?:\x00[\x20-\x7e]){6,}")
 
 DENIED_PARTS = {
     ".git",
@@ -130,6 +132,7 @@ def encoded_markers(values: list[str]) -> list[bytes]:
         for variant in {value, value.replace("\\", "/"), value.replace("/", "\\")}:
             markers.append(variant.encode("utf-8"))
             markers.append(variant.encode("utf-16-le"))
+            markers.append(variant.encode("utf-16-be"))
     return markers
 
 
@@ -138,14 +141,19 @@ def scan_bytes(payload: bytes, forbidden: list[bytes]) -> None:
     for marker in forbidden:
         if marker.lower() in lowered:
             raise ArtifactScanError("artifact contains a forbidden local build path")
-    views = [payload]
-    null_count = payload.count(b"\0")
-    if null_count >= 2 and null_count * 8 >= len(payload):
-        views.append(payload.replace(b"\0", b""))
-    for view in views:
+    views = [("raw", payload)]
+    views.extend(
+        ("UTF-16LE", match.group(0)[::2]) for match in UTF16_LE_ASCII_RUN.finditer(payload)
+    )
+    views.extend(
+        ("UTF-16BE", match.group(0)[1::2]) for match in UTF16_BE_ASCII_RUN.finditer(payload)
+    )
+    for view_name, view in views:
         for label, pattern in SENSITIVE_PATTERNS:
             if pattern.search(view):
-                raise ArtifactScanError(f"artifact contains a high-confidence {label} pattern")
+                raise ArtifactScanError(
+                    f"artifact contains a high-confidence {label} pattern in {view_name} data"
+                )
 
 
 def scan_stream(stream, forbidden: list[bytes]) -> None:
@@ -240,7 +248,7 @@ def scan_archive(path: Path, forbidden: list[bytes]) -> tuple[int, int]:
         members = archive.infolist()
         if len(members) != declared_members:
             raise ArtifactScanError("archive member count is outside the public release limit")
-        for info in members:
+        for member_index, info in enumerate(members, start=1):
             member_path = validate_member_path(info.filename)
             scan_bytes(info.filename.encode("utf-8"), forbidden)
             scan_bytes(info.comment, forbidden)
@@ -270,7 +278,12 @@ def scan_archive(path: Path, forbidden: list[bytes]) -> tuple[int, int]:
                 raise ArtifactScanError("archive exceeds the total public release size limit")
             with archive.open(info) as stream:
                 if not info.is_dir():
-                    scan_stream(stream, forbidden)
+                    try:
+                        scan_stream(stream, forbidden)
+                    except ArtifactScanError as exc:
+                        raise ArtifactScanError(
+                            f"{exc}; archive member payload index {member_index}"
+                        ) from None
     return len(members), total
 
 
@@ -366,6 +379,11 @@ def self_test() -> None:
             "utf16-assignment.txt",
             ("dashboard_token=" + synthetic_canary.decode()).encode("utf-16-le"),
         )
+        require_public_file_rejection(
+            root,
+            "utf16be-assignment.txt",
+            ("dashboard_token=" + synthetic_canary.decode()).encode("utf-16-be"),
+        )
 
         archive_comment = root / "archive-comment.zip"
         with zipfile.ZipFile(archive_comment, "w") as archive:
@@ -443,6 +461,10 @@ def self_test() -> None:
                 "authToken = tokenInput.value.trim(); "
                 "$Password = $env:OPENIRL_OBS_PASSWORD, "
                 "$secret = [Convert]::ToBase64String($secretBytes)",
+            )
+            archive.writestr(
+                "OpenIRL/safe.bin",
+                (b"\0" * 96) + b"https\0://operator:synthetic-value@relay.invalid",
             )
         scan_archive(safe_controls, [])
 
