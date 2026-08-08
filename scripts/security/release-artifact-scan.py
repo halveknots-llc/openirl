@@ -23,6 +23,7 @@ ZIP_EOCD_BYTES = 22
 MAX_ZIP_COMMENT_BYTES = 65_535
 ZIP_LOCAL_HEADER = struct.Struct("<4s5H3L2H")
 ZIP_LOCAL_SIGNATURE = b"PK\x03\x04"
+ASCII_TEXT_RUN = re.compile(rb"[\x09\x0a\x0d\x20-\x7e]{6,}")
 UTF16_LE_ASCII_RUN = re.compile(rb"(?:[\x20-\x7e]\x00){6,}")
 UTF16_BE_ASCII_RUN = re.compile(rb"(?:\x00[\x20-\x7e]){6,}")
 
@@ -52,7 +53,12 @@ SENSITIVE_PATTERNS = (
     ("bearer credential", re.compile(rb"Bearer\s+[A-Za-z0-9._~+/=-]{20,}", re.IGNORECASE)),
     (
         "credential-bearing URL",
-        re.compile(rb"[a-z][a-z0-9+.-]*://[^\s/:@]+:[^@\s/]+@", re.IGNORECASE),
+        re.compile(
+            rb"[a-z][a-z0-9+.-]*://"
+            rb"[A-Za-z0-9._~!$&'()*+,;=%-]+:"
+            rb"[A-Za-z0-9._~!$&'()*+,;=:%-]+@",
+            re.IGNORECASE,
+        ),
     ),
     (
         "assigned credential",
@@ -141,7 +147,9 @@ def scan_bytes(payload: bytes, forbidden: list[bytes]) -> None:
     for marker in forbidden:
         if marker.lower() in lowered:
             raise ArtifactScanError("artifact contains a forbidden local build path")
-    views = [("raw", payload)]
+    views = [
+        ("ASCII", match.group(0)) for match in ASCII_TEXT_RUN.finditer(payload)
+    ]
     views.extend(
         ("UTF-16LE", match.group(0)[::2]) for match in UTF16_LE_ASCII_RUN.finditer(payload)
     )
@@ -357,6 +365,8 @@ def self_test() -> None:
         private_key = ("-----BEGIN " + "PRIVATE KEY-----").encode("ascii")
         unsafe_payloads = {
             "private-key": private_key,
+            "userinfo-credential": b"https://operator:"
+            + b"synthetic-release-canary-12345@relay.invalid",
             "fragment-credential": b"https://relay.invalid/live#access_token="
             + b"synthetic-release-canary-12345",
             "camel-query-credential": b"https://relay.invalid/api?apiKey="
@@ -464,7 +474,11 @@ def self_test() -> None:
             )
             archive.writestr(
                 "OpenIRL/safe.bin",
-                (b"\0" * 96) + b"https\0://operator:synthetic-value@relay.invalid",
+                (b"\0" * 96)
+                + b"https\0://operator:synthetic-value@relay.invalid"
+                + b"https://operator:"
+                + bytes([1, 2, 3])
+                + b"synthetic-value@relay.invalid",
             )
         scan_archive(safe_controls, [])
 
