@@ -44,12 +44,15 @@ jobs:
       - name: Require a version-matched release tag
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           $manifest = Get-Content -Raw dist/windows-alpha/openirl-windows-portable-alpha.manifest.json | ConvertFrom-Json
-          if ("v$($manifest.package_version)" -ne "${{ github.ref_name }}") {
+          if ("v$($manifest.package_version)" -ne $env:RELEASE_TAG) {
             throw 'Release tag does not match the Cargo package version'
           }
-          git merge-base --is-ancestor "${{ github.sha }}" origin/main
+          git merge-base --is-ancestor $env:EXPECTED_SHA origin/main
           if ($LASTEXITCODE -ne 0) {
             throw 'Release tag commit is not reachable from origin/main'
           }
@@ -96,7 +99,9 @@ jobs:
 
   provenance:
     name: Sign build provenance
-    if: github.event_name != 'pull_request'
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -126,7 +131,7 @@ jobs:
 
   release:
     name: Publish alpha prerelease
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: provenance
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -170,11 +175,17 @@ jobs:
       - name: Publish immutable-tag prerelease
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "${{ github.ref_name }}"
-          release-files/*
-          --repo "${{ github.repository }}"
-          --verify-tag
-          --prerelease
-          --title "OpenIRL ${{ github.ref_name }}"
-          --notes-file release/ALPHA_RELEASE_NOTES.md
+          RELEASE_TAG: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          gh release create "${RELEASE_TAG}" \
+            release-files/* \
+            --repo "${REPOSITORY}" \
+            --verify-tag \
+            --draft \
+            --prerelease \
+            --title "OpenIRL ${RELEASE_TAG}" \
+            --notes-file release/ALPHA_RELEASE_NOTES.md
+          gh release edit "${RELEASE_TAG}" \
+            --repo "${REPOSITORY}" \
+            --draft=false

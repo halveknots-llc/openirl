@@ -208,6 +208,88 @@ jobs:
         findings = static_validate.validate_actions_policy(self.root)
         self.assertTrue(any(kind == "local-action" for _, kind, _ in findings))
 
+    def test_rejects_ref_context_embedded_in_run_script(self) -> None:
+        self.write(
+            ".github/workflows/ci.yml",
+            """
+name: ci
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.ref_name }}"
+""",
+        )
+
+        findings = static_validate.validate_actions_policy(self.root)
+        self.assertTrue(any(kind == "run-context-boundary" for _, kind, _ in findings))
+
+    def test_rejects_write_permissions_without_trusted_push_ref(self) -> None:
+        self.write(
+            ".github/workflows/ci.yml",
+            """
+name: ci
+jobs:
+  attest:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - run: echo checked
+""",
+        )
+
+        findings = static_validate.validate_actions_policy(self.root)
+        self.assertTrue(
+            any(kind == "privileged-job-condition" for _, kind, _ in findings)
+        )
+
+    def test_rejects_negative_main_ref_condition_for_write_permissions(self) -> None:
+        self.write(
+            ".github/workflows/ci.yml",
+            """
+name: ci
+jobs:
+  attest:
+    if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: echo checked
+""",
+        )
+
+        findings = static_validate.validate_actions_policy(self.root)
+        self.assertTrue(
+            any(kind == "privileged-job-condition" for _, kind, _ in findings)
+        )
+
+    def test_accepts_trusted_push_ref_and_env_bound_context(self) -> None:
+        self.write(
+            ".github/workflows/ci.yml",
+            """
+name: ci
+jobs:
+  attest:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - env:
+          RELEASE_REF: ${{ github.ref_name }}
+        run: echo "${RELEASE_REF}"
+""",
+        )
+
+        self.assertEqual(static_validate.validate_actions_policy(self.root), [])
+
 
 class PublicEvidencePolicyTests(unittest.TestCase):
     def test_detects_a_guarded_surface_that_drops_required_language(self) -> None:

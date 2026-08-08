@@ -2,15 +2,37 @@
 
 ## Verify before launch
 
-For a workflow artifact or tagged prerelease, download the zip, checksum,
-manifest, and verification report. Compare the archive SHA-256, then verify its
-signed provenance:
+For a tagged prerelease, select the release by its expected version tag and
+download the zip, checksum, manifest, and verification report into an otherwise
+empty directory. Authenticate the release, compare the archive SHA-256, and
+verify every downloaded file against the tag's source ref and the repository's
+packaging workflow:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\openirl-windows-portable-alpha.zip
-Get-Content .\openirl-windows-portable-alpha.zip.sha256
-gh attestation verify .\openirl-windows-portable-alpha.zip `
-  --repo halveknots-llc/openirl
+$repo = 'halveknots-llc/openirl'
+$tag = 'v0.1.0-alpha.0'
+$workflow = "$repo/.github/workflows/windows-package.yml"
+
+gh release verify $tag --repo $repo
+if ($LASTEXITCODE -ne 0) { throw 'Release authentication failed' }
+
+$expected = ((Get-Content .\openirl-windows-portable-alpha.zip.sha256) -split '\s+')[0].ToLowerInvariant()
+$actual = (Get-FileHash -Algorithm SHA256 .\openirl-windows-portable-alpha.zip).Hash.ToLowerInvariant()
+if ($actual -ne $expected) { throw 'Archive checksum mismatch' }
+
+$files = @(
+  'openirl-windows-portable-alpha.zip',
+  'openirl-windows-portable-alpha.zip.sha256',
+  'openirl-windows-portable-alpha.manifest.json',
+  'openirl-windows-portable-alpha.verification.json'
+)
+foreach ($file in $files) {
+  gh attestation verify ".\$file" `
+    --repo $repo `
+    --signer-workflow $workflow `
+    --source-ref "refs/tags/$tag"
+  if ($LASTEXITCODE -ne 0) { throw "Provenance verification failed: $file" }
+}
 ```
 
 The provenance attestation does not provide an Authenticode publisher signature.
@@ -20,13 +42,17 @@ package path; the MSI script remains an operator-reviewed experimental path.
 
 ## Local package verification
 
-From a clean checkout at the manifest's `source_revision`:
+From a clean checkout at the manifest's `source_revision`, place the zip,
+checksum, and manifest in `dist\windows-alpha`. Write the new local verification
+report outside that evidence directory so a prior report cannot be mistaken for
+an input:
 
 ```powershell
 $revision = (Get-Content -Raw .\dist\windows-alpha\openirl-windows-portable-alpha.manifest.json | ConvertFrom-Json).source_revision
 .\scripts\windows\verify-alpha-portable.ps1 `
   -ArtifactDir dist\windows-alpha `
-  -ExpectedRevision $revision
+  -ExpectedRevision $revision `
+  -ReportPath .\local-verification.json
 ```
 
 This reruns the archive, manifest, inventory, secret-scan, and packaged CLI
