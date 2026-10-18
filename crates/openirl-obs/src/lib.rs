@@ -604,6 +604,10 @@ fn validate_request_status(data: &Value) -> Result<(), ObsError> {
 }
 
 /// Derives the OBS WebSocket v5 authentication response.
+///
+/// OBS requires SHA-256 for this wire protocol, not a password-storage hash.
+/// Changing either digest to a password KDF would prevent authentication.
+/// See <https://github.com/obsproject/obs-websocket/blob/master/docs/generated/protocol.md#creating-an-authentication-string>.
 #[must_use]
 pub fn obs_auth_response(password: &str, salt: &str, challenge: &str) -> String {
     let secret_hash = Sha256::digest(format!("{password}{salt}").as_bytes());
@@ -638,6 +642,88 @@ mod tests {
         let second = obs_auth_response(&password, &salt, &challenge);
         assert_eq!(first, second);
         assert!(!first.is_empty());
+    }
+
+    #[test]
+    fn auth_response_matches_obs_v5_wire_vectors() {
+        // The salt and challenge come from the OBS v5 protocol example. Expected
+        // responses were independently calculated with Python hashlib/base64.
+        let salt = "lM1GncleQOaCu9lT1yeUZhFYnqhsLLP1G5lAGo3ixaI=";
+        let challenge = "+IxH4CnCiqpX1rM9scsNynZzbOe4KhDeYcTNS3PDaeY=";
+        for (credential, expected) in [
+            (
+                "synthetic-credential",
+                "ecloBMC2geTyLWczwfyaS8BuhXSoLBc1VO2H0rLCqws=",
+            ),
+            ("配信テスト", "78aTjgjA9oBrrmZqmEHLK5WYM1McmmX40zaVCsZgMgc="),
+        ] {
+            assert_eq!(obs_auth_response(credential, salt, challenge), expected);
+        }
+    }
+
+    #[test]
+    fn identify_payload_sends_only_the_challenge_response() -> Result<(), ObsError> {
+        let credential = "synthetic-credential";
+        let controller = ObsWebSocketController::new(ObsWebSocketConfig::from_host_port(
+            "127.0.0.1",
+            4455,
+            Some(credential.to_string()),
+        ));
+        let hello = json!({"op": OP_HELLO, "d": {"authentication": {
+            "salt": "lM1GncleQOaCu9lT1yeUZhFYnqhsLLP1G5lAGo3ixaI=",
+            "challenge": "+IxH4CnCiqpX1rM9scsNynZzbOe4KhDeYcTNS3PDaeY="
+        }}});
+        assert_eq!(
+            controller.identify_payload(&hello)?,
+            json!({"rpcVersion": 1, "authentication":
+                "ecloBMC2geTyLWczwfyaS8BuhXSoLBc1VO2H0rLCqws="})
+        );
+
+        let mut changed_challenge = hello.clone();
+        changed_challenge["d"]["authentication"]["challenge"] = json!("another-challenge");
+        assert_ne!(
+            controller.identify_payload(&hello)?,
+            controller.identify_payload(&changed_challenge)?
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn identify_payload_rejects_missing_authentication_inputs() {
+        for (authentication, credential) in [
+            (json!({"salt": "salt"}), Some("synthetic-credential")),
+            (
+                json!({"challenge": "challenge"}),
+                Some("synthetic-credential"),
+            ),
+            (json!({"salt": "salt", "challenge": "challenge"}), None),
+        ] {
+            let controller = ObsWebSocketController::new(ObsWebSocketConfig::from_host_port(
+                "127.0.0.1",
+                4455,
+                credential.map(ToOwned::to_owned),
+            ));
+            let hello = json!({"op": OP_HELLO, "d": {"authentication": authentication}});
+            assert!(matches!(
+                controller.identify_payload(&hello),
+                Err(ObsError::Authentication(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn identify_payload_supports_servers_without_authentication() -> Result<(), ObsError> {
+        let controller = ObsWebSocketController::new(ObsWebSocketConfig::from_host_port(
+            "127.0.0.1",
+            4455,
+            None,
+        ));
+        let hello = json!({"op": OP_HELLO, "d": {"rpcVersion": 1}});
+        assert_eq!(
+            controller.identify_payload(&hello)?,
+            json!({"rpcVersion": 1})
+        );
+        Ok(())
     }
 
     #[test]

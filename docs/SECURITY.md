@@ -17,6 +17,14 @@ For vulnerability reporting, supported versions, and disclosure expectations, us
 - Write generated support and diagnostic files with owner-only permissions where supported by the host platform.
 - Do not include unredacted support bundles, credential-bearing URLs, stream keys, SRT passphrases, dashboard tokens, OBS passwords, or relay credentials in public issues.
 
+## OBS WebSocket authentication
+
+The [OBS WebSocket v5 protocol](https://github.com/obsproject/obs-websocket/blob/master/docs/generated/protocol.md#creating-an-authentication-string) requires a challenge response computed as `Base64(SHA256(Base64(SHA256(password + salt)) + challenge))`. OpenIRL sends that response in the Identify message; it does not persist the intermediate secret or use this function to store password verifiers. Replacing either hash with Argon2, scrypt, bcrypt, or PBKDF2 would prevent authentication with OBS.
+
+This is a protocol compatibility exception for the `rust/weak-sensitive-data-hashing` code-scanning rule, not a general password-hashing recommendation. Keep code scanning enabled and review any other use independently. Fixed wire vectors, changed-challenge checks, and malformed authentication-input tests cover the adapter contract.
+
+The response does not encrypt the connection or authenticate the server. An observer who captures a plaintext WebSocket handshake can attempt offline password guesses. Keep OBS on loopback or use a trusted encrypted tunnel for remote access; do not expose its WebSocket port publicly. Automated protocol tests do not establish live OBS compatibility.
+
 ## Browser request boundary
 
 The dashboard is intended to be served by the OpenIRL agent itself. For browser requests, the agent compares the `Origin` authority with the request `Host` authority. A same-origin request may use the configured loopback tokenless path. A different origin is accepted only when it is listed exactly in `api.cors_allowed_origins`, and that request must still authenticate with the dashboard token. `null`, malformed, or untrusted browser origins are rejected before control handlers run.
