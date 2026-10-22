@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-CARGO = ["cargo", "run", "--quiet", "--package", "openirl-agent", "--"]
+CARGO = ["cargo", "run", "--locked", "--quiet", "--package", "openirl-agent", "--"]
 MAX_RESPONSE_BYTES = 1024 * 1024
 
 

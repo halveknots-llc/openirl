@@ -61,12 +61,13 @@ fn ci() -> Result<()> {
         &["scripts/security/release-artifact-scan.py", "--self-test"],
     )?;
     run(python, &["scripts/smoke/demo-mode-smoke.py"])?;
-    run("cargo", &["deny", "check"])?;
+    run("cargo", &["deny", "--locked", "check"])?;
     run("cargo", &["fmt", "--all", "--", "--check"])?;
     run(
         "cargo",
         &[
             "clippy",
+            "--locked",
             "--workspace",
             "--all-targets",
             "--",
@@ -74,7 +75,7 @@ fn ci() -> Result<()> {
             "warnings",
         ],
     )?;
-    run("cargo", &["test", "--workspace"])?;
+    run("cargo", &["test", "--locked", "--workspace"])?;
     Ok(())
 }
 

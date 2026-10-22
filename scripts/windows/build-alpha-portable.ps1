@@ -116,7 +116,7 @@ if ($ExpectedRevision -and $revision -ne $ExpectedRevision.Trim().ToLowerInvaria
   throw 'Checked-out source revision does not match the expected workflow revision'
 }
 
-cargo xtask ci
+cargo --locked xtask ci
 Assert-LastExitCode 'OpenIRL source validation'
 Assert-CleanWorktree 'post-validation'
 

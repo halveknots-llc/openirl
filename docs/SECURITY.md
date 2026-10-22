@@ -31,6 +31,30 @@ The dashboard is intended to be served by the OpenIRL agent itself. For browser 
 
 This boundary limits browser-based cross-site control. It is not a replacement for network isolation, a dashboard token, host firewalling, or an authenticated reverse proxy when the agent is intentionally exposed beyond the local machine.
 
+The agent rejects framing through both `Content-Security-Policy: frame-ancestors 'none'`
+and `X-Frame-Options: DENY`, including static pages and error responses. It also
+disables MIME sniffing and referrer transmission, and marks API responses
+`Cache-Control: no-store` so status, generated profiles, and authentication failures
+are not retained by compliant HTTP caches. The CSP additionally blocks base URL
+overrides and embedded objects; it is not a full script-source policy.
+
+## Dependency and build integrity
+
+CI, security smokes, and package builds use the committed Cargo lockfile without
+resolving new versions. `cargo deny --locked check` refreshes RustSec advisories and
+rejects known vulnerabilities and yanked dependencies without advisory exceptions.
+Dependabot groups Cargo minor/patch version updates and also checks regex; major
+updates remain separate. Pre-1.0 minor updates can still break compatibility and
+must pass review and CI. A successful local Cargo update does not prove that the
+hosted Dependabot updater has completed its next scheduled run.
+
+Workflow actions and relay container bases are pinned by digest. CI and CodeQL
+checkouts do not leave Git credentials available to later build steps. These
+controls do not patch the GitHub runner's embedded Node.js runtime, the host's
+certificate store, or separately installed OBS, MediaMTX and relay executables.
+Keep those components updated through their upstream security channels, and verify
+release provenance before executing downloaded binaries.
+
 ## Roles
 
 - Owner: all controls.
