@@ -1,5 +1,6 @@
 [advisories]
 ignore = []
+yanked = "deny"
 
 [licenses]
 allow = [
