@@ -61,7 +61,14 @@ the next hosted Dependabot update will succeed.
 - Added locked dependency resolution to CI, security/demo smokes and build entry
   points, rejected yanked dependencies, disabled credential persistence for CI
   and CodeQL checkouts, and grouped Dependabot minor/patch updates.
-- `cargo --locked xtask ci` passed: 16 Python policy tests, static validation,
+- Found and fixed implicit network exposure in the bundled MediaMTX templates:
+  omitted RTSP/HLS/MoQ settings inherited enabled upstream defaults, and a
+  loopback WebRTC HTTP address did not constrain the separate UDP listener.
+  Explicitly disabled unused listeners and constrained HTTP/UDP, ICE candidates
+  and browser origins to loopback. New negative fixtures reject omitted defaults,
+  public addresses, external ICE servers and wildcard origins. This is source and
+  configuration verification against MediaMTX v1.21.2, not a live media test.
+- `cargo --locked xtask ci` passed: 21 Python policy tests, static validation,
   handoff audit, security smoke, release scanner self-test, demo smoke, dependency
   policy, formatting, Clippy, 103 Rust tests and doc-test execution. Rust counts
   come from the original successful test output, not artifact manifests.
@@ -74,6 +81,9 @@ coverage was 0.8.4, while this project uses 0.8.9; the installed 0.8.9 routing s
 confirmed middleware wrapping of routes and fallbacks. Installed tower-http 0.7.1
 source/changelog and the actual Rust 1.88 build resolved its compatibility contract.
 The new CSP addresses framing/base/object controls, not complete script isolation.
+Context7 and the tagged upstream MediaMTX v1.21.2 configuration also established
+the independent media listener defaults and ICE settings; no installed MediaMTX
+version was available to match or run.
 
 ## Integration and remaining evidence
 

@@ -55,6 +55,21 @@ certificate store, or separately installed OBS, MediaMTX and relay executables.
 Keep those components updated through their upstream security channels, and verify
 release provenance before executing downloaded binaries.
 
+## Local media listeners
+
+The three bundled MediaMTX templates explicitly disable RTSP, HLS, MoQ, PPROF
+and playback, and bind API, metrics, RTMP, SRT, WebRTC HTTP and WebRTC UDP to
+loopback. WebRTC uses only a loopback ICE candidate, no external ICE servers and
+explicit local dashboard/player origins. `webrtcAddress` alone does not restrict
+the separate UDP listener. The static validator rejects missing or broadened
+listener settings in these local templates.
+
+These settings were checked against the [MediaMTX v1.21.2 configuration
+reference](https://github.com/bluenviron/mediamtx/blob/v1.21.2/mediamtx.yml). Use a separate
+operator configuration for LAN/VPN ingest with authentication and deliberate
+listener/origin changes. Environment overrides can change MediaMTX's effective
+configuration; template validation does not inspect a running external process.
+
 ## Roles
 
 - Owner: all controls.
