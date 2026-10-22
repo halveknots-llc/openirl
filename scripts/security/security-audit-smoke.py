@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "config/openirl.example.toml"
-CARGO = ["cargo", "run", "--quiet", "--package", "openirl-agent", "--"]
+CARGO = ["cargo", "run", "--locked", "--quiet", "--package", "openirl-agent", "--"]
 CANARIES = [
     "super-dashboard-token",
     "obs-password-canary",
@@ -114,6 +114,8 @@ def assert_tokenless_localhost_rejects_untrusted_authority() -> None:
         else:
             raise AssertionError("local agent did not become ready for security probe")
 
+        assert_response_headers(port)
+
         untrusted = request_status(
             port,
             f"untrusted.example:{port}",
@@ -138,6 +140,41 @@ def assert_tokenless_localhost_rejects_untrusted_authority() -> None:
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait(timeout=5)
+
+
+def assert_response_headers(port: int) -> None:
+    # Probe the actual router, including static fallback and early auth failures.
+    for path, origin, expected_status in (
+        ("/", None, 200),
+        ("/health", None, 200),
+        ("/missing-static-file", None, 404),
+        ("/api/state", None, 200),
+        ("/api/auth/status", None, 200),
+        ("/api/state", "https://untrusted.example", 403),
+        ("/api/missing-endpoint", None, 404),
+    ):
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        try:
+            headers = {"Origin": origin} if origin is not None else {}
+            connection.request("GET", path, headers=headers)
+            response = connection.getresponse()
+            response.read()
+            if response.status != expected_status:
+                raise AssertionError(f"{path} returned HTTP {response.status}")
+            for name, expected in (
+                ("X-Frame-Options", "DENY"),
+                ("X-Content-Type-Options", "nosniff"),
+                ("Referrer-Policy", "no-referrer"),
+            ):
+                if response.getheader(name) != expected:
+                    raise AssertionError(f"{path} is missing {name}: {expected}")
+            policy = response.getheader("Content-Security-Policy", "")
+            if "frame-ancestors 'none'" not in policy.split("; "):
+                raise AssertionError(f"{path} permits framing")
+            if path.startswith("/api/") and response.getheader("Cache-Control") != "no-store":
+                raise AssertionError(f"{path} permits caching API responses")
+        finally:
+            connection.close()
 
 
 def support_bundle_config(tmp: Path) -> Path:
