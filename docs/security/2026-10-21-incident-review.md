@@ -79,9 +79,17 @@ The new CSP addresses framing/base/object controls, not complete script isolatio
 
 The candidate starts from maintenance commit
 `2975188f6948366ad96242e08f516f0cbc0854de`. Public `main` remained
-`6eb7489340385bf810ad89aeb37bb19cb9cc8d67` when inspected. The existing instruction
-to complete signed Creator Presence publication before merging maintenance still
-applies; no public-main fast-forward or release is established by this review.
+`6eb7489340385bf810ad89aeb37bb19cb9cc8d67` at the start of this review. This security
+update is approved for integration after hosted checks, ahead of the pending
+Creator Presence publication. That publication's signed candidate must be rebuilt
+and revalidated against the new base; this maintenance change does not establish
+its publication or release readiness.
+
+Repository settings readback confirmed immutable releases, secret scanning,
+secret-scanning push protection and Dependabot security updates are enabled.
+There were no published releases and no open Dependabot, code-scanning or
+secret-scanning alerts at inspection time. Those alert counts do not override the
+reproduced RustSec finding in the pre-update dependency graph.
 
 No live OBS, MediaMTX, SRTLA, mobile encoder, Docker image or Windows installer was
 tested locally. Those tools were not available on PATH. Local Rust/HTTP validation
