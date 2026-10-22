@@ -2,6 +2,7 @@
 """Static validation for the OpenIRL source repository."""
 from __future__ import annotations
 
+import ipaddress
 import json
 import re
 import tomllib
@@ -54,6 +55,64 @@ MANIFEST_REVISION_ASSIGNMENT = re.compile(
 REQUIRED_GIT_ATTRIBUTE = "* text=auto eol=lf"
 
 Finding = tuple[str, str, str]
+LOCAL_MEDIAMTX_TEMPLATES = (
+    "deploy/mediamtx.openirl.yml",
+    "deploy/mediamtx/openirl.mediamtx.yml",
+    "presets/relay/mediamtx.openirl.local.yml",
+)
+
+
+def validate_local_mediamtx_templates(root: Path = ROOT) -> list[Finding]:
+    """Prevent local templates from inheriting public upstream listeners."""
+    findings: list[Finding] = []
+    for relative in LOCAL_MEDIAMTX_TEMPLATES:
+        try:
+            if yaml is None:
+                raise ValueError("PyYAML is required to validate MediaMTX templates")
+            path = root / relative
+            if path.stat().st_size > MAX_POLICY_FILE_BYTES:
+                raise ValueError("MediaMTX template exceeds 2 MiB")
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+            if not isinstance(document, dict):
+                raise ValueError("MediaMTX configuration must be a mapping")
+        except Exception as exc:
+            findings.append((relative, "local-media-listener", str(exc)))
+            continue
+        for service in ("rtsp", "hls", "moq", "pprof", "playback"):
+            if document.get(service) is not False:
+                findings.append((relative, "local-media-listener", f"{service} must be explicitly disabled"))
+        for service in ("api", "metrics", "rtmp", "srt", "webrtc"):
+            if document.get(service) is not True:
+                findings.append((relative, "local-media-listener", f"{service} must be explicitly enabled"))
+            address = document.get(f"{service}Address")
+            if not loopback_socket_address(address):
+                findings.append((relative, "local-media-listener", f"{service}Address must bind a literal loopback address"))
+        if not loopback_socket_address(document.get("webrtcLocalUDPAddress")):
+            findings.append((relative, "local-media-listener", "WebRTC UDP must bind loopback separately from HTTP"))
+        if document.get("webrtcLocalTCPAddress") != "":
+            findings.append((relative, "local-media-listener", "WebRTC TCP must be explicitly disabled"))
+        if document.get("webrtcIPsFromInterfaces") is not False:
+            findings.append((relative, "local-media-listener", "WebRTC must not advertise external interfaces"))
+        if document.get("webrtcAdditionalHosts") != ["127.0.0.1"] or document.get("webrtcICEServers2") != []:
+            findings.append((relative, "local-media-listener", "WebRTC must use only the local candidate, without external ICE servers"))
+        origins = document.get("webrtcAllowOrigins")
+        allowed = {"http://127.0.0.1:7707", "http://localhost:7707", "http://127.0.0.1:8889", "http://localhost:8889"}
+        if not isinstance(origins, list) or not origins or any(not isinstance(origin, str) or origin not in allowed for origin in origins):
+            findings.append((relative, "local-media-listener", "WebRTC origins must be explicit local dashboard/player origins"))
+    return findings
+
+
+def loopback_socket_address(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    match = re.fullmatch(r"(\[[^\]]+\]|[^:]+):([0-9]+)", value)
+    if match is None:
+        return False
+    try:
+        host, port = match.groups()
+        return ipaddress.ip_address(host.strip("[]")).is_loopback and 0 < int(port) < 65536
+    except ValueError:
+        return False
 
 
 def joined(parts: list[str]) -> str:
@@ -503,6 +562,7 @@ def main() -> int:
     findings.extend(validate_public_evidence_policy())
     findings.extend(validate_release_verification_docs())
     findings.extend(validate_git_attributes())
+    findings.extend(validate_local_mediamtx_templates())
 
     for path in ROOT.rglob("*.json"):
         if path.name.startswith("._") or "target" in path.parts:

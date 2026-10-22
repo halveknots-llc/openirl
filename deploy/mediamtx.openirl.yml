@@ -18,9 +18,19 @@ srtAddress: 127.0.0.1:9000
 
 webrtc: true
 webrtcAddress: 127.0.0.1:8889
+webrtcLocalUDPAddress: 127.0.0.1:8189
+webrtcLocalTCPAddress: ""
+webrtcIPsFromInterfaces: false
+webrtcAdditionalHosts: [127.0.0.1]
+webrtcICEServers2: []
+webrtcAllowOrigins: ["http://127.0.0.1:7707", "http://localhost:7707", "http://127.0.0.1:8889", "http://localhost:8889"]
 
+# Explicitly disable upstream defaults (reviewed against MediaMTX v1.21.2).
 hls: false
 rtsp: false
+moq: false
+pprof: false
+playback: false
 
 paths:
   openirl-main:

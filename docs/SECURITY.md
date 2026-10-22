@@ -17,11 +17,58 @@ For vulnerability reporting, supported versions, and disclosure expectations, us
 - Write generated support and diagnostic files with owner-only permissions where supported by the host platform.
 - Do not include unredacted support bundles, credential-bearing URLs, stream keys, SRT passphrases, dashboard tokens, OBS passwords, or relay credentials in public issues.
 
+## OBS WebSocket authentication
+
+The [OBS WebSocket v5 protocol](https://github.com/obsproject/obs-websocket/blob/master/docs/generated/protocol.md#creating-an-authentication-string) requires a challenge response computed as `Base64(SHA256(Base64(SHA256(password + salt)) + challenge))`. OpenIRL sends that response in the Identify message; it does not persist the intermediate secret or use this function to store password verifiers. Replacing either hash with Argon2, scrypt, bcrypt, or PBKDF2 would prevent authentication with OBS.
+
+This is a protocol compatibility exception for the `rust/weak-sensitive-data-hashing` code-scanning rule, not a general password-hashing recommendation. Keep code scanning enabled and review any other use independently. Fixed wire vectors, changed-challenge checks, and malformed authentication-input tests cover the adapter contract.
+
+The response does not encrypt the connection or authenticate the server. An observer who captures a plaintext WebSocket handshake can attempt offline password guesses. Keep OBS on loopback or use a trusted encrypted tunnel for remote access; do not expose its WebSocket port publicly. Automated protocol tests do not establish live OBS compatibility.
+
 ## Browser request boundary
 
 The dashboard is intended to be served by the OpenIRL agent itself. For browser requests, the agent compares the `Origin` authority with the request `Host` authority. A same-origin request may use the configured loopback tokenless path. A different origin is accepted only when it is listed exactly in `api.cors_allowed_origins`, and that request must still authenticate with the dashboard token. `null`, malformed, or untrusted browser origins are rejected before control handlers run.
 
 This boundary limits browser-based cross-site control. It is not a replacement for network isolation, a dashboard token, host firewalling, or an authenticated reverse proxy when the agent is intentionally exposed beyond the local machine.
+
+The agent rejects framing through both `Content-Security-Policy: frame-ancestors 'none'`
+and `X-Frame-Options: DENY`, including static pages and error responses. It also
+disables MIME sniffing and referrer transmission, and marks API responses
+`Cache-Control: no-store` so status, generated profiles, and authentication failures
+are not retained by compliant HTTP caches. The CSP additionally blocks base URL
+overrides and embedded objects; it is not a full script-source policy.
+
+## Dependency and build integrity
+
+CI, security smokes, and package builds use the committed Cargo lockfile without
+resolving new versions. `cargo deny --locked check` refreshes RustSec advisories and
+rejects known vulnerabilities and yanked dependencies without advisory exceptions.
+Dependabot groups Cargo minor/patch version updates and also checks regex; major
+updates remain separate. Pre-1.0 minor updates can still break compatibility and
+must pass review and CI. A successful local Cargo update does not prove that the
+hosted Dependabot updater has completed its next scheduled run.
+
+Workflow actions and relay container bases are pinned by digest. CI and CodeQL
+checkouts do not leave Git credentials available to later build steps. These
+controls do not patch the GitHub runner's embedded Node.js runtime, the host's
+certificate store, or separately installed OBS, MediaMTX and relay executables.
+Keep those components updated through their upstream security channels, and verify
+release provenance before executing downloaded binaries.
+
+## Local media listeners
+
+The three bundled MediaMTX templates explicitly disable RTSP, HLS, MoQ, PPROF
+and playback, and bind API, metrics, RTMP, SRT, WebRTC HTTP and WebRTC UDP to
+loopback. WebRTC uses only a loopback ICE candidate, no external ICE servers and
+explicit local dashboard/player origins. `webrtcAddress` alone does not restrict
+the separate UDP listener. The static validator rejects missing or broadened
+listener settings in these local templates.
+
+These settings were checked against the [MediaMTX v1.21.2 configuration
+reference](https://github.com/bluenviron/mediamtx/blob/v1.21.2/mediamtx.yml). Use a separate
+operator configuration for LAN/VPN ingest with authentication and deliberate
+listener/origin changes. Environment overrides can change MediaMTX's effective
+configuration; template validation does not inspect a running external process.
 
 ## Roles
 

@@ -390,5 +390,69 @@ class GitAttributesTests(unittest.TestCase):
             )
 
 
+class LocalMediaTemplateTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory(prefix="openirl-media-policy-")
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.documents = {}
+        for relative in static_validate.LOCAL_MEDIAMTX_TEMPLATES:
+            source = static_validate.ROOT / relative
+            self.documents[relative] = static_validate.yaml.safe_load(source.read_text())
+            self.write(relative, self.documents[relative])
+
+    def write(self, relative: str, document: dict) -> None:
+        path = self.root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(static_validate.yaml.safe_dump(document), encoding="utf-8")
+
+    def test_shipped_templates_explicitly_restrict_every_listener(self) -> None:
+        self.assertEqual(static_validate.validate_local_mediamtx_templates(self.root), [])
+
+    def test_omitting_upstream_defaults_is_rejected(self) -> None:
+        for relative, original in self.documents.items():
+            for key in ("rtsp", "hls", "moq", "webrtcAddress", "webrtcLocalUDPAddress"):
+                with self.subTest(template=relative, omitted=key):
+                    document = dict(original)
+                    del document[key]
+                    self.write(relative, document)
+                    self.assertTrue(static_validate.validate_local_mediamtx_templates(self.root))
+                    self.write(relative, original)
+
+    def test_public_media_and_ice_exposure_is_rejected(self) -> None:
+        relative = static_validate.LOCAL_MEDIAMTX_TEMPLATES[0]
+        original = self.documents[relative]
+        mutations = [
+            (key, "0.0.0.0:8889")
+            for key in ("apiAddress", "metricsAddress", "rtmpAddress", "srtAddress", "webrtcAddress", "webrtcLocalUDPAddress")
+        ] + [
+            ("webrtcLocalTCPAddress", ":8189"),
+            ("webrtcIPsFromInterfaces", True),
+            ("webrtcAdditionalHosts", ["media.example"]),
+            ("webrtcICEServers2", [{"url": "stun:stun.example:3478"}]),
+            ("webrtcAllowOrigins", ["*"]),
+            ("webrtcAllowOrigins", ["http://untrusted.example"]),
+            ("moq", True),
+        ]
+        for key, value in mutations:
+            with self.subTest(key=key, value=value):
+                self.write(relative, {**original, key: value})
+                self.assertTrue(static_validate.validate_local_mediamtx_templates(self.root))
+
+    def test_missing_or_malformed_template_fails_closed(self) -> None:
+        path = self.root / static_validate.LOCAL_MEDIAMTX_TEMPLATES[0]
+        for value in ("[]", "webrtc: [", "null"):
+            path.write_text(value, encoding="utf-8")
+            self.assertTrue(static_validate.validate_local_mediamtx_templates(self.root))
+        path.unlink()
+        self.assertTrue(static_validate.validate_local_mediamtx_templates(self.root))
+
+    def test_socket_address_requires_literal_loopback_and_valid_port(self) -> None:
+        for value in ("127.0.0.1:8189", "[::1]:8189"):
+            self.assertTrue(static_validate.loopback_socket_address(value))
+        for value in (None, ":8189", "0.0.0.0:8189", "[::]:8189", "localhost:8189", "127.0.0.1:0", "127.0.0.1:65536", "[[::1]]:8189"):
+            self.assertFalse(static_validate.loopback_socket_address(value))
+
+
 if __name__ == "__main__":
     unittest.main()

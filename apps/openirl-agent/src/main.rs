@@ -1361,6 +1361,7 @@ async fn serve_config(
         .fallback_service(ServeDir::new("apps/openirl-agent/static"))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
+        .layer(middleware::from_fn(security_response_headers))
         .with_state(state);
 
     tracing::info!(%bind, "serving OpenIRL agent");
@@ -1371,6 +1372,26 @@ async fn serve_config(
     )
     .await?;
     Ok(())
+}
+
+async fn security_response_headers(request: Request, next: Next) -> Response {
+    let is_api = request.uri().path().starts_with("/api/");
+    let mut response = next.run(request).await;
+    let headers = response.headers_mut();
+    headers.insert("x-frame-options", HeaderValue::from_static("DENY"));
+    headers.insert(
+        "x-content-type-options",
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert("referrer-policy", HeaderValue::from_static("no-referrer"));
+    headers.insert(
+        "content-security-policy",
+        HeaderValue::from_static("frame-ancestors 'none'; base-uri 'none'; object-src 'none'"),
+    );
+    if is_api {
+        headers.insert("cache-control", HeaderValue::from_static("no-store"));
+    }
+    response
 }
 
 fn log_validation_report(report: &ConfigValidationReport) {
