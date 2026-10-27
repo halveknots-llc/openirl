@@ -1,32 +1,55 @@
+# Monthly, grouped and cooled down so update PRs stay few and cheap in Actions minutes.
 version: 2
 updates:
   - package-ecosystem: cargo
     directory: /
     schedule:
-      interval: weekly
-      day: tuesday
+      interval: monthly
       time: "09:00"
       timezone: America/Los_Angeles
-    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 2
     groups:
       cargo-minor-patch:
         patterns: ["*"]
         update-types: [minor, patch]
+      cargo-major:
+        patterns: ["*"]
+        update-types: [major]
+      cargo-security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: tuesday
+      interval: monthly
       time: "09:30"
       timezone: America/Los_Angeles
-    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 1
+    groups:
+      actions:
+        patterns: ["*"]
 
   - package-ecosystem: pip
     directory: /requirements
     schedule:
-      interval: weekly
-      day: tuesday
+      interval: monthly
       time: "09:45"
       timezone: America/Los_Angeles
-    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 2
+    groups:
+      pip-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      pip-major:
+        patterns: ["*"]
+        update-types: [major]
+      pip-security:
+        applies-to: security-updates
+        patterns: ["*"]
