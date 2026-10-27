@@ -1,0 +1,265 @@
+#!/usr/bin/env bash
+# scripts/check: the one local gate for this repo. Run it before every push; CI runs the same script.
+#
+#   scripts/check          fast: only the steps whose files changed against the default branch
+#   scripts/check --all    every step, whatever changed (CI runs this)
+#   scripts/check --list   show the steps without running them
+#
+# Exit 0 means safe to push. Quiet on success; a failing step prints the tail of its output.
+# Docs-only changes skip everything. Dependencies install once when missing or stale.
+# Env: CHECK_OFFLINE=1 never installs, CHECK_VERBOSE=1 streams output, CHECK_BASE=<ref> sets the diff base.
+
+set -uo pipefail
+cd "$(dirname "$0")/.." || exit 2
+
+# Steps that already fail on the default branch report WARN instead of FAIL until someone fixes them.
+KNOWN_RED=""
+
+# The same checks as `cargo xtask ci`, split into steps so only the affected ones run.
+# cargo deny (it fetches the advisory database) stays in CI's `cargo xtask ci`.
+PY='\.py$|^requirements/|^(fixtures|config|presets|compatibility|audit|release|plugin|deploy)/'
+RS='\.rs$|(^|/)Cargo\.(toml|lock)$|^rust-toolchain\.toml$|^rustfmt\.toml$|^\.cargo/'
+# CI's hash-pinned static-validation requirements in target/check-venv: the repo's scanners walk the
+# tree and skip only target/ and .git/, so a ./.venv would be scanned.
+py_deps() {
+  req=requirements/static-validation.txt V=target/check-venv
+  [ -x $V/bin/python ] && deps_fresh $V/.check-deps "$req" && return 0
+  [ "$OFFLINE" = 1 ] && skip "Python environment out of date and CHECK_OFFLINE=1"
+  if have uv; then
+    [ -x $V/bin/python ] || uv venv -q "$V" || return 1
+    uv pip install -q --python $V/bin/python --only-binary :all: --require-hashes -r "$req" || return 1
+  else
+    [ -x $V/bin/python ] || python3 -m venv "$V" || return 1
+    $V/bin/python -m pip install -q --disable-pip-version-check --only-binary=:all: --require-hashes -r "$req" || return 1
+  fi
+  deps_mark $V/.check-deps "$req"
+}
+vpy() { PATH="$PWD/target/check-venv/bin:$PATH" "$@"; }
+# scripts/audit/handoff_audit.py rewrites audit/HANDOFF_AUDIT.md and audit/handoff-audit.json; on a clean tree they come out unchanged.
+validate() {
+  python3 scripts/static_validate.py &&
+    python3 scripts/audit/handoff_audit.py &&
+    python3 scripts/security/security-audit-smoke.py &&
+    python3 scripts/security/release-artifact-scan.py --self-test &&
+    python3 scripts/smoke/demo-mode-smoke.py
+}
+steps() {
+  step hygiene  '.'   check_hygiene
+  step fmt      "$RS" cargo_q fmt --all -- --check
+  step clippy   "$RS" cargo_q clippy --locked --workspace --all-targets -- -D warnings
+  step test     "$RS" cargo_q test --locked --workspace
+  step deps-py  "$PY" py_deps
+  step py-tests "$PY" vpy python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+  step validate '.'   vpy validate
+}
+
+# ---- engine (check convention v1; shared across halveknots-llc repos, keep in sync) ----
+# Bash 3.2 compatible (stock macOS). No network except one-time dependency install.
+
+ALL=0 LIST=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --all) ALL=1 ;;
+    --list) LIST=1 ;;
+    -h|--help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "check: unknown option: $1 (try --help)" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/check.XXXXXX") || exit 2
+trap 'rm -rf "$TMP"' EXIT
+OFFLINE=${CHECK_OFFLINE:-0}
+FAILED="" WARNED="" STARTED=$SECONDS
+
+have() { command -v "$1" >/dev/null 2>&1; }
+# Inside a step: give up on the step without failing it (tool missing, wrong OS).
+skip() { printf '%s' "$*" >"$TMP/skip"; exit 3; }
+is_macos() { [ "$(uname -s)" = Darwin ]; }
+
+# Files changed against the default branch, plus staged, unstaged and untracked files.
+base_commit() {
+  for ref in ${CHECK_BASE:-} origin/HEAD origin/main origin/master; do
+    git rev-parse -q --verify "$ref^{commit}" >/dev/null 2>&1 || continue
+    git merge-base HEAD "$ref" 2>/dev/null && return 0
+  done
+  return 1
+}
+DOCS_RE='(^|/)docs?/|\.(md|mdx|markdown|rst|adoc|png|jpe?g|gif|webp|ico|pdf|mov|mp4)$|(^|/)(LICENSE[^/]*|CODEOWNERS|\.gitignore|\.gitattributes|\.editorconfig)$'
+CHANGED="" CODE=""
+if [ "$ALL" = 0 ] && [ "$LIST" = 0 ]; then
+  if BASE=$(base_commit); then
+    CHANGED=$( { git diff --name-only "$BASE" HEAD --; git diff --name-only HEAD --; git ls-files --others --exclude-standard; } 2>/dev/null | sort -u )
+    CODE=$(printf '%s\n' "$CHANGED" | grep -Ev "$DOCS_RE" | grep -v '^$')
+    if [ -z "$CHANGED" ]; then echo "check: no changes against the default branch (use --all for a full run)"; exit 0; fi
+    if [ -z "$CODE" ]; then echo "check: docs-only change, nothing to check"; exit 0; fi
+    printf '%s\n' "$CODE" | grep -qx 'scripts/check' && ALL=1  # the gate itself changed: run everything
+  else
+    ALL=1  # no base to diff against (shallow CI checkout): run everything
+  fi
+fi
+[ "$ALL" = 1 ] && [ "$LIST" = 0 ] && echo "check: full run"
+
+# step <name> <changed-path regex (ERE)> <command...>
+# Runs the command when any changed non-doc path matches (always with --all).
+# Quiet on success; on failure prints the last 80 lines of its output.
+# When a step named deps* fails, the steps after it (up to the next deps* step) are skipped.
+DEPS_BROKEN=""
+step() {
+  name=$1 pat=$2; shift 2
+  if [ "$LIST" = 1 ]; then printf '  %-12s %s\n' "$name" "$*"; return 0; fi
+  case "$name" in deps*) DEPS_BROKEN="" ;; esac
+  if [ -n "$DEPS_BROKEN" ]; then printf '  %-5s %-12s %s failed\n' skip "$name" "$DEPS_BROKEN"; return 0; fi
+  if [ "$ALL" = 0 ] && ! printf '%s\n' "$CODE" | grep -Eq -- "$pat"; then
+    printf '  %-5s %-12s no related changes\n' "-" "$name"; return 0
+  fi
+  rm -f "$TMP/skip"; t0=$SECONDS
+  if [ "${CHECK_VERBOSE:-0}" = 1 ]; then ( "$@" ); rc=$?; else ( "$@" ) >"$TMP/log" 2>&1; rc=$?; fi
+  dt=$((SECONDS - t0))s
+  if [ "$rc" = 0 ]; then printf '  %-5s %-12s %s\n' ok "$name" "$dt"
+  elif [ "$rc" = 3 ] && [ -f "$TMP/skip" ]; then printf '  %-5s %-12s %s\n' skip "$name" "$(cat "$TMP/skip")"
+  else
+    case "$name" in deps*) DEPS_BROKEN=$name ;; esac
+    case " ${KNOWN_RED:-} " in
+      *" $name "*) printf '  %-5s %-12s %s (known red on the default branch, not blocking)\n' WARN "$name" "$dt"; WARNED="$WARNED $name" ;;
+      *) printf '  %-5s %-12s %s (exit %s)\n' FAIL "$name" "$dt" "$rc"; FAILED="$FAILED $name"
+         [ "${CHECK_VERBOSE:-0}" = 1 ] || { echo "  ---- $name: last 80 lines ----"; tail -n 80 "$TMP/log" | sed 's/^/  | /'; } ;;
+    esac
+  fi
+}
+
+# Universal hygiene on changed files: conflict markers, oversized files, shell and JSON syntax, obvious secrets.
+check_hygiene() {
+  files=$(if [ "$ALL" = 1 ]; then git ls-files; else printf '%s\n' "$CHANGED"; fi | while IFS= read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done)
+  [ -n "$files" ] || return 0
+  bad=0 max=$(( ${CHECK_MAX_FILE_MB:-50} * 1024 * 1024 ))
+  if printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 grep -IlE '^(<<<<<<<|>>>>>>>)( |$)' 2>/dev/null; then echo "^ unresolved merge conflict markers"; bad=1; fi
+  [ "$ALL" = 1 ] || printf '%s\n' "$files" | while IFS= read -r f; do
+    sz=$(wc -c <"$f" | tr -d ' ')
+    [ "$sz" -le "$max" ] || { echo "$f is $((sz / 1048576)) MB; use Git LFS or keep it out of git"; echo x >"$TMP/big"; }
+  done
+  [ -f "$TMP/big" ] && bad=1
+  printf '%s\n' "$files" | grep -E '\.(sh|bash)$' | while IFS= read -r f; do bash -n "$f" || echo x >"$TMP/badsh"; done
+  [ -f "$TMP/badsh" ] && bad=1
+  json=$(printf '%s\n' "$files" | grep -E '\.json$' | grep -Ev '(^|/)(tsconfig[^/]*|jsconfig[^/]*|devcontainer|[^/]*\.jsonc?)\.json$|(^|/)(node_modules|\.vscode)/')
+  if [ -n "$json" ] && have python3; then
+    printf '%s\n' "$json" | python3 -c '
+import json, sys
+bad = 0
+for p in sys.stdin.read().splitlines():
+    try:
+        json.load(open(p, encoding="utf-8-sig"))
+    except Exception as e:
+        print(f"{p}: invalid JSON ({e})"); bad = 1
+sys.exit(bad)' || bad=1
+  fi
+  if [ "$ALL" = 0 ] && [ -n "${BASE:-}" ]; then
+    added=$( { git diff "$BASE" -U0 --no-color -- . | grep -E '^\+[^+]'
+               git ls-files --others --exclude-standard -z | xargs -0 grep -IhE '.' ; } 2>/dev/null )
+    if printf '%s\n' "$added" | grep -qE -- '-----BEGIN ([A-Z]+ )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{60,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abpr]-[A-Za-z0-9-]{10,}'; then
+      echo "possible secret in added lines (private key or API token); remove it and rotate it"; bad=1
+    fi
+  fi
+  return $bad
+}
+
+# Install dependencies only when missing or when the lockfile changed since the last install.
+deps_fresh() { # deps_fresh <stamp-file> <lockfile...>
+  stamp=$1; shift
+  sum=$(cat "$@" 2>/dev/null | cksum)
+  [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$sum" ]
+}
+deps_mark() { stamp=$1; shift; mkdir -p "$(dirname "$stamp")"; cat "$@" 2>/dev/null | cksum >"$stamp"; }
+node_deps() { # node_deps [dir]
+  d=${1:-.}; ( cd "$d" || exit 1
+  lock=$(ls pnpm-lock.yaml bun.lock bun.lockb yarn.lock package-lock.json 2>/dev/null | head -n 1)
+  [ -d node_modules ] && deps_fresh node_modules/.check-deps package.json $lock && exit 0
+  [ "$OFFLINE" = 1 ] && skip "dependencies out of date and CHECK_OFFLINE=1"
+  case "$lock" in
+    pnpm-lock.yaml) pnpm install --frozen-lockfile --prefer-offline ;;
+    bun.lock|bun.lockb) bun install --frozen-lockfile ;;
+    yarn.lock) yarn install --frozen-lockfile --prefer-offline --non-interactive ;;
+    package-lock.json) npm ci --prefer-offline --no-audit --no-fund ;;
+    *) npm install --prefer-offline --no-audit --no-fund ;;
+  esac && deps_mark node_modules/.check-deps package.json $lock )
+}
+# npm_run <script> [dir]: run a package.json script with the repo's package manager.
+npm_run() {
+  d=${2:-.}; ( cd "$d" || exit 1
+  if [ -f pnpm-lock.yaml ] || [ -f ../pnpm-lock.yaml ] || [ -f ../../pnpm-lock.yaml ]; then pnpm run --silent "$1"
+  elif [ -f bun.lock ] || [ -f bun.lockb ]; then bun run "$1"
+  elif [ -f yarn.lock ]; then yarn run --silent "$1"
+  else npm run --silent "$1"; fi )
+}
+# venv_deps <pip install args...>: keep ./.venv in sync with the project's Python manifests.
+venv_deps() {
+  set -- "$@"; manifests=$(ls pyproject.toml setup.py setup.cfg requirements*.txt 2>/dev/null)
+  if [ -x .venv/bin/python ] && deps_fresh .venv/.check-deps $manifests && [ "$(cat .venv/.check-args 2>/dev/null)" = "$*" ]; then return 0; fi
+  [ "$OFFLINE" = 1 ] && skip "Python environment out of date and CHECK_OFFLINE=1"
+  if have uv; then
+    [ -x .venv/bin/python ] || uv venv -q .venv || return 1
+    uv pip install -q --python .venv/bin/python "$@" || return 1
+  else
+    [ -x .venv/bin/python ] || python3 -m venv .venv || return 1
+    .venv/bin/python -m pip install -q --disable-pip-version-check "$@" || return 1
+  fi
+  deps_mark .venv/.check-deps $manifests; printf '%s' "$*" >.venv/.check-args
+}
+# uv_deps [uv sync args...]: sync a uv project from uv.lock without changing the lock.
+uv_deps() {
+  have uv || skip "uv not installed"
+  if [ -x .venv/bin/python ] && deps_fresh .venv/.check-deps pyproject.toml uv.lock; then return 0; fi
+  [ "$OFFLINE" = 1 ] && skip "Python environment out of date and CHECK_OFFLINE=1"
+  uv sync -q --frozen "$@" && deps_mark .venv/.check-deps pyproject.toml uv.lock
+}
+# py: run Python tools inside the project's environment (uv project, local .venv, or system).
+py() {
+  if [ -f uv.lock ] && have uv; then
+    if [ "$OFFLINE" = 1 ]; then uv run --frozen --offline "$@"; else uv run --frozen "$@"; fi
+  elif [ -x .venv/bin/python ]; then PATH="$PWD/.venv/bin:$PATH" "$@"
+  else "$@"; fi
+}
+# need <tool...>: skip the step when a tool is missing (the step still runs wherever it is installed).
+need() { for t in "$@"; do have "$t" || skip "$t not installed"; done; }
+# Apple toolchains: steps skip on Linux, so agents in Linux sandboxes still get every other step.
+swift_pm() { is_macos || skip "needs macOS (Swift package for Apple platforms)"; need swift; swift "$@"; }
+# xcode_test [scheme]: build and run unit tests (UI test targets skipped) on a simulator or the Mac.
+# Override with XCODE_SCHEME, XCODE_DESTINATION or XCODE_TEST_ARGS.
+xcode_test() {
+  is_macos || skip "needs macOS with Xcode"
+  need xcodebuild
+  if [ -f project.yml ] && ! ls -d ./*.xcodeproj >/dev/null 2>&1; then need xcodegen; xcodegen generate --quiet || return 1; fi
+  container=$(ls -d ./*.xcworkspace 2>/dev/null | head -n 1); kind=-workspace
+  [ -n "$container" ] || { container=$(ls -d ./*.xcodeproj 2>/dev/null | head -n 1); kind=-project; }
+  [ -n "$container" ] || skip "no .xcodeproj or .xcworkspace at the repo root"
+  scheme=${1:-${XCODE_SCHEME:-}}
+  [ -n "$scheme" ] || scheme=$(basename "$container" | sed 's/\.[^.]*$//')
+  info=$(xcodebuild -list $kind "$container" 2>/dev/null)
+  printf '%s\n' "$info" | sed -n '/Schemes:/,$p' | grep -qx "[[:space:]]*$scheme" || skip "scheme $scheme not found; set XCODE_SCHEME"
+  dest=${XCODE_DESTINATION:-}
+  if [ -z "$dest" ]; then
+    sdk=$(xcodebuild $kind "$container" -scheme "$scheme" -showBuildSettings 2>/dev/null | awk '$1 == "SDKROOT" {print $3; exit}')
+    case "$sdk" in
+      macosx*|"") dest="platform=macOS" ;;
+      *) kindname=iPhone; case "$sdk" in appletv*) kindname="Apple TV";; watch*) kindname="Apple Watch";; xr*) kindname="Apple Vision";; esac
+         udid=$(xcrun simctl list devices available 2>/dev/null | grep "$kindname" | grep -Eo '[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' | head -n 1)
+         [ -n "$udid" ] || skip "no available $kindname simulator; set XCODE_DESTINATION"
+         dest="id=$udid" ;;
+    esac
+  fi
+  skips=$(printf '%s\n' "$info" | sed -n '/Targets:/,/^$/p' | awk '/UITests?$/ {print "-skip-testing:" $1}')
+  # shellcheck disable=SC2086
+  xcodebuild test $kind "$container" -scheme "$scheme" -destination "$dest" -quiet \
+    CODE_SIGNING_ALLOWED=NO $skips ${XCODE_TEST_ARGS:-}
+}
+cargo_q() { need cargo; cargo "$@"; }
+go_q() { need go; go "$@"; }
+gofmt_check() { need gofmt; out=$(gofmt -l $(git ls-files '*.go')); [ -z "$out" ] || { echo "gofmt needed:"; echo "$out"; return 1; }; }
+pytest_q() { py python -m pytest -q -x --no-header "$@"; rc=$?; [ "$rc" = 5 ] && return 0; return $rc; }
+
+steps
+
+if [ "$LIST" = 0 ]; then
+  if [ -n "$FAILED" ]; then echo "check: FAILED:$FAILED ($((SECONDS - STARTED))s)"; exit 1; fi
+  echo "check: ok ($((SECONDS - STARTED))s)${WARNED:+, known red:$WARNED}"
+fi
