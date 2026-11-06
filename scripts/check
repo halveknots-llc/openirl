@@ -153,7 +153,19 @@ for p in sys.stdin.read().splitlines():
         print(f"{p}: invalid JSON ({e})"); bad = 1
 sys.exit(bad)' || bad=1
   fi
-  if [ "$ALL" = 0 ] && [ -n "${BASE:-}" ]; then
+  if [ "$ALL" = 1 ]; then
+    # Full runs also work on shallow checkouts with no base ref.
+    # Report the finding without printing credential contents.
+    git grep -IqE -e '-----BEGIN ([A-Z]+ )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{60,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abpr]-[A-Za-z0-9-]{10,}' -- .
+    scan_rc=$?
+    if [ "$scan_rc" = 0 ]; then
+      echo "possible secret in tracked files (private key or API token); remove it and rotate it"
+      bad=1
+    elif [ "$scan_rc" != 1 ]; then
+      echo "could not scan tracked files for secrets" >&2
+      bad=1
+    fi
+  elif [ -n "${BASE:-}" ]; then
     added=$( { git diff "$BASE" -U0 --no-color -- . | grep -E '^\+[^+]'
                git ls-files --others --exclude-standard -z | xargs -0 grep -IhE '.' ; } 2>/dev/null )
     if printf '%s\n' "$added" | grep -qE -- '-----BEGIN ([A-Z]+ )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{60,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abpr]-[A-Za-z0-9-]{10,}'; then
